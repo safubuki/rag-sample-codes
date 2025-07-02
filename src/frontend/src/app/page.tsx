@@ -189,8 +189,10 @@ export default function Home() {
             
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               {MODES.map((mode) => (
-                <label key={mode.value} className="cursor-pointer group">
-                  <div className={`relative p-4 rounded-xl border-2 transition-all duration-200 ${
+                <label key={mode.value} className={`cursor-pointer group ${
+                  mode.value === 'rag_function_calling' ? 'md:col-span-2 lg:col-span-2' : ''
+                }`}>
+                  <div className={`relative p-4 rounded-xl border-2 transition-all duration-200 h-20 flex items-center ${
                     selectedMode === mode.value 
                       ? `${mode.color} border-opacity-100 shadow-md scale-[1.02]` 
                       : 'bg-gray-50 border-gray-200 hover:border-gray-300 hover:shadow-sm'
@@ -203,12 +205,14 @@ export default function Home() {
                       onChange={(e) => setSelectedMode(e.target.value)}
                       className="absolute top-3 right-3"
                     />
-                    <div className="pr-8">
-                      <div className="font-semibold text-sm mb-1">{mode.label}</div>
+                    <div className="pr-8 flex-1">
+                      <div className="font-semibold text-sm mb-1 flex items-center">
+                        {mode.label}
+                        {mode.value === 'rag_function_calling' && (
+                          <span className="ml-2 text-xs font-medium bg-amber-600 text-white px-2 py-1 rounded-full">推奨</span>
+                        )}
+                      </div>
                       <div className="text-xs opacity-75">{mode.description}</div>
-                      {mode.value === 'rag_function_calling' && (
-                        <div className="mt-2 text-xs font-medium text-amber-700">推奨</div>
-                      )}
                     </div>
                   </div>
                 </label>
