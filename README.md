@@ -1,6 +1,6 @@
-# 各種情報提供手法の比較用RAGプロトタイプ群
+# 構造化RAG比較システム
 
-このプロジェクトは、LLMに外部情報を与えるための複数の手法を比較・検証する目的で、5つの異なるパターンのPythonスクリプトを実装しています。最終的な目標は、RAGとFunction Callingを組み合わせた高度なエージェントを構築することですが、その前に各アプローチの長所と短所を理解するため、個別のプロトタイプを作成しています。
+このプロジェクトは、LLMに外部情報を与えるための複数の手法を比較・検証する目的で、5つの異なるパターンのRAG実装を提供する**フルスタックWebアプリケーション**です。PythonのFastAPIバックエンドとNext.jsフロントエンドで構築されており、デモモード・実行ログ・トークン数表示などの高度な機能を備えています。
 
 ## 📁 プロジェクト構成
 
@@ -8,47 +8,70 @@
 rag-sample-codes/
 ├── .gitignore                       # Git除外設定
 ├── LICENSE                          # MITライセンス
-├── knowledge.txt                    # 製品取扱説明書（共通データ）
-├── requirements.txt                 # 必要なPythonパッケージ
-├── main.py                         # 全プロトタイプの実行スクリプト
-├── run_llm_only.py                 # 実装1: LLM単体利用
-├── run_prompt_stuffing.py          # 実装2: プロンプトスタッフィング
-├── run_rag_only.py                 # 実装3: RAGのみ
-├── run_function_calling_only.py    # 実装4: Function Callingのみ
-├── run_rag_plus_fancall.py         # 実装5: RAG + Function Calling
-└── README.md                       # このファイル
+├── README.md                        # このファイル
+├── data/
+│   └── knowledge.txt               # 製品取扱説明書（共通データ）
+├── logs/                           # 実行ログファイル保存先
+├── src/
+│   ├── backend/                    # Python FastAPI バックエンド
+│   │   ├── main.py                # FastAPI アプリケーション本体
+│   │   ├── rag_engines.py         # 5つのRAGエンジン実装
+│   │   ├── logger_config.py       # ログ設定
+│   │   ├── requirements.txt       # Python依存パッケージ
+│   │   ├── run_llm_only.py       # 既存実装1: LLM単体利用
+│   │   ├── run_prompt_stuffing.py # 既存実装2: プロンプトスタッフィング
+│   │   ├── run_rag_only.py        # 既存実装3: RAGのみ
+│   │   ├── run_function_calling_only.py # 既存実装4: Function Calling
+│   │   └── run_rag_plus_fancall.py # 既存実装5: RAG + Function Calling
+│   └── frontend/                   # Next.js フロントエンド
+│       ├── src/app/page.tsx       # メインUI
+│       ├── package.json           # Node.js依存パッケージ
+│       └── ... (その他Next.jsファイル)
+└── .venv/                          # Python仮想環境
 ```
 
-## 🎯 各実装の目的と特徴
+## 🎯 システム機能
 
-### 実装1: LLM単体利用 (`run_llm_only.py`)
-- **目的**: 外部情報を一切与えなかった場合の、LLMの基準（ベースライン）を確認
+### Webアプリケーション機能
+
+- **直感的なUI**: モダンなレスポンシブWebインターフェース
+- **モード切替**: 5つのRAGパターンを簡単に切り替え可能
+- **リアルタイム実行ステータス**: 処理の進行状況と中間生成物を表示
+- **デモモード**: プレゼンテーション用の遅延表示機能
+- **トークン使用量表示**: 入力・出力・総トークン数の詳細表示
+- **ナレッジベース編集**: ブラウザ上でknowledge.txtを直接編集可能
+- **実行ログ**: JSONL形式での詳細ログ自動生成・ダウンロード機能
+
+### 5つのRAG実装パターン
+
+#### 1. LLM単体利用
+- **目的**: 外部情報を一切与えなかった場合のベースライン確認
 - **特徴**: 純粋なLLMの知識のみで回答
 - **モデル**: gemini-2.5-flash
 
-### 実装2: プロンプトスタッフィング (`run_prompt_stuffing.py`)
-- **目的**: LLMの広大なコンテキストウィンドウを使い、力技で全ての情報を与える手法
-- **特徴**: knowledge.txtの全内容をプロンプトに埋め込み
+#### 2. プロンプトスタッフィング
+- **目的**: LLMのコンテキストウィンドウを活用した全情報埋め込み
+- **特徴**: knowledge.txtの全内容をプロンプトに含める
 - **利点**: シンプルで確実
 - **欠点**: トークン消費量が多い
 
-### 実装3: RAGのみ (`run_rag_only.py`)
-- **目的**: 現代的なRAGアーキテクチャの基本形を実装
+#### 3. RAGのみ
+- **目的**: 現代的なRAGアーキテクチャの基本形
 - **特徴**: 
   - ベクトル検索による関連情報の取得
   - FAISS + HuggingFace Embeddings
   - LCELチェーンによる処理
 - **利点**: 効率的で拡張性が高い
 
-### 実装4: Function Callingのみ (`run_function_calling_only.py`)
-- **目的**: LLMが自律的にツール（関数）を呼び出す挙動の基本を実装
+#### 4. Function Callingのみ
+- **目的**: LLMの自律的ツール利用能力の検証
 - **特徴**: 
   - `@tool`デコレーターによるツール定義
   - LLMの自律的なツール選択
 - **利点**: 柔軟で動的な情報取得
 
-### 実装5: RAG + Function Calling (`run_rag_plus_fancall.py`) ⭐推奨⭐
-- **目的**: RAGの強力な検索能力をツール化し、LLMに他のツールと使い分けさせる最高度な構成
+#### 5. RAG + Function Calling ⭐推奨⭐
+- **目的**: RAG検索とツール利用の組み合わせによる最高度な構成
 - **特徴**: 
   - AgentExecutorによる複数ツールの管理
   - RAGをツール化した高度な検索
@@ -58,62 +81,116 @@ rag-sample-codes/
 ## 🚀 セットアップと実行
 
 ### 1. 前提条件
+
 - Python 3.10以上
+- Node.js 18以上
 - Google Cloud Projectの設定（Vertex AI APIの有効化）
 - 適切な認証情報の設定
 
-### 2. 依存関係のインストール
+### 2. インストール手順
+
+#### バックエンド（Python）
+
 ```bash
-pip install -r requirements.txt
+# 仮想環境作成・有効化
+python -m venv .venv
+.venv\Scripts\activate  # Windows
+# source .venv/bin/activate  # Linux/Mac
+
+# 依存関係インストール
+pip install -r src/backend/requirements.txt
+```
+
+#### フロントエンド（Node.js）
+
+```bash
+cd src/frontend
+npm install
 ```
 
 ### 3. 実行方法
 
-#### 全プロトタイプを順次実行
+#### 開発サーバー起動
+
 ```bash
-python main.py
+# バックエンド起動（ターミナル1）
+python src/backend/main.py
+
+# フロントエンド起動（ターミナル2）  
+cd src/frontend
+npm run dev
 ```
 
-#### 個別実行
-```bash
-# 実装1: LLM単体利用
-python run_llm_only.py
+#### アクセス
 
-# 実装2: プロンプトスタッフィング  
-python run_prompt_stuffing.py
+- **フロントエンド**: http://localhost:3000
+- **バックエンドAPI**: http://localhost:8000
+- **API仕様書**: http://localhost:8000/docs
 
-# 実装3: RAGのみ
-python run_rag_only.py
+### 4. 使用方法
 
-# 実装4: Function Callingのみ
-python run_function_calling_only.py
-
-# 実装5: RAG + Function Calling（推奨）
-python run_rag_plus_fancall.py
-```
+1. ブラウザで http://localhost:3000 にアクセス
+2. 処理モードを選択（5つのパターンから選択）
+3. 質問を入力（例: 「エラーコードE-404の対処法は？」）
+4. 「送信」ボタンをクリック
+5. リアルタイムで処理状況・結果・トークン数を確認
+6. 必要に応じてナレッジベースを編集
+7. 実行ログをダウンロード
 
 ## 📊 テストクエリ
 
-すべての実装で共通のテストクエリを使用しています：
+すべての実装で共通のテストクエリを使用できます：
 **「エラーコードE-404の対処法は？」**
 
 このクエリは、knowledge.txtに含まれる具体的な情報（E-404エラーの対処法）を問うものです。
 
 ## 🔧 使用技術
 
+### バックエンド
+
+- **フレームワーク**: FastAPI
 - **LLM**: Google Vertex AI (gemini-2.5-flash)
-- **フレームワーク**: LangChain
+- **RAGライブラリ**: LangChain
 - **ベクトル検索**: FAISS
 - **埋め込みモデル**: sentence-transformers/all-MiniLM-L6-v2
 - **エージェント**: LangChain AgentExecutor
+- **ログ**: structlog
+
+### フロントエンド
+
+- **フレームワーク**: Next.js 15 (React 19)
+- **スタイリング**: Tailwind CSS
+- **HTTP通信**: Axios
+- **UI**: Lucide React Icons
+- **通知**: React Hot Toast
+- **言語**: TypeScript
 
 ## 📈 期待される結果の比較
 
-1. **実装1**: 一般的な知識に基づく曖昧な回答
-2. **実装2**: 完全で正確な回答（トークン消費大）
-3. **実装3**: 関連性の高い正確な回答
-4. **実装4**: ツール使用による動的な情報検索
-5. **実装5**: 最も柔軟で実用的な回答
+1. **LLM単体**: 一般的な知識に基づく曖昧な回答
+2. **プロンプトスタッフィング**: 完全で正確な回答（トークン消費大）
+3. **RAGのみ**: 関連性の高い正確な回答
+4. **Function Calling**: ツール使用による動的な情報検索
+5. **RAG + Function Calling**: 最も柔軟で実用的な回答
+
+## 📁 ログフォーマット
+
+実行ログは`logs/`フォルダに`YYYYMMDDHHMMSS_llm-rag-exp.jsonl`形式で保存されます：
+
+```json
+{
+  "timestamp": "2025-07-02T15:30:45.123456",
+  "execution_mode": "rag_function_calling",
+  "query": "エラーコードE-404の対処法は？",
+  "response": "...",
+  "input_tokens": 150,
+  "output_tokens": 200,
+  "total_tokens": 350,
+  "execution_time": 3.45,
+  "intermediate_steps": [...],
+  "demo_mode": false
+}
+```
 
 ## 🎓 学習ポイント
 
@@ -122,16 +199,48 @@ python run_rag_plus_fancall.py
 - プロンプトスタッフィングのシンプルさと制限
 - LLM単体の限界
 - RAG + Function Callingの組み合わせによる相乗効果
+- フルスタックWebアプリケーション開発
+- API設計とフロントエンド・バックエンド連携
 
 ## 💡 次のステップ
 
-このプロトタイプを基に、以下の拡張が可能です：
+このシステムを基に、以下の拡張が可能です：
 
 - 複数のデータソースへの対応
 - より高度なツールの追加
 - ストリーミング対応
 - マルチターン会話の実装
 - 評価メトリクスの追加
+- 認証・権限管理
+- デプロイメント対応
+
+## 🏗️ アーキテクチャ
+
+```mermaid
+┌─────────────────┐    HTTP API    ┌─────────────────┐
+│  Next.js        │ ◄─────────────► │  FastAPI        │
+│  Frontend       │    Port 3000   │  Backend        │
+│  (TypeScript)   │                │  (Python)       │
+└─────────────────┘                └─────────────────┘
+                                           │
+                                           ▼
+                                   ┌─────────────────┐
+                                   │  RAG Engines    │
+                                   │  - LLM Only     │
+                                   │  - Prompt Stuff │
+                                   │  - RAG Only     │
+                                   │  - Function Call│
+                                   │  - RAG + FC     │
+                                   └─────────────────┘
+                                           │
+                                           ▼
+                                   ┌─────────────────┐
+                                   │  External APIs  │
+                                   │  - Vertex AI    │
+                                   │  - FAISS        │
+                                   │  - HuggingFace  │
+                                   └─────────────────┘
+```
 
 ## 📄 ライセンス
 
