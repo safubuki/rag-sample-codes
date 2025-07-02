@@ -14,8 +14,8 @@ interface ProcessingMode {
 
 interface IntermediateStep {
   step: string;
-  data: any;
-  timestamp: string;
+  description: string;
+  timestamp: number;
 }
 
 interface ProcessResponse {
@@ -111,14 +111,14 @@ export default function Home() {
         demo_mode: demoMode
       });
 
-      setResult(response.data.result);
-      setExecutionTime(response.data.execution_time);
+      setResult(response.data.result || '');
+      setExecutionTime(response.data.execution_time || 0);
       setTokenCounts({
-        input: response.data.input_tokens,
-        output: response.data.output_tokens,
-        total: response.data.total_tokens
+        input: response.data.input_tokens || 0,
+        output: response.data.output_tokens || 0,
+        total: response.data.total_tokens || 0
       });
-      setIntermediateSteps(response.data.intermediate_steps);
+      setIntermediateSteps(response.data.intermediate_steps || []);
       setCurrentStep('完了');
       setProgress(100);
       
@@ -359,8 +359,11 @@ export default function Home() {
                   {intermediateSteps.map((step, index) => (
                     <div key={index} className="border-l-4 border-blue-300 pl-4 py-2 bg-blue-50 rounded-r">
                       <div className="font-medium text-sm text-blue-900">{step.step}</div>
-                      <div className="text-xs text-blue-700 mt-1 font-mono">
-                        {JSON.stringify(step.data, null, 2).substring(0, 150)}...
+                      <div className="text-xs text-blue-700 mt-1">
+                        {step.description}
+                      </div>
+                      <div className="text-xs text-gray-500 mt-1">
+                        {new Date(step.timestamp * 1000).toLocaleTimeString()}
                       </div>
                     </div>
                   ))}
