@@ -15,13 +15,18 @@ from typing import Dict, List, Optional
 import structlog
 import tiktoken
 import uvicorn
-from env_utils import get_google_cloud_project, setup_environment
+from env_utils import (check_google_cloud_auth, get_google_cloud_project, setup_environment)
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from logger_config import setup_logging
 from pydantic import BaseModel
-from rag_engines import ExecutionMode, RAGEngineFactory
+from run_function_calling_only import process_function_calling_only
+# 各処理モジュールをインポート
+from run_llm_only import process_llm_only
+from run_prompt_stuffing import process_prompt_stuffing
+from run_rag_only import process_rag_only
+from run_rag_plus_fancall import process_rag_plus_function_calling
 
 # 環境変数を読み込み
 setup_environment()
@@ -197,29 +202,36 @@ async def process_query(request: ProcessRequest):
                 input_tokens=input_tokens)
 
     try:
-        # RAGエンジン作成
-        engine_factory = RAGEngineFactory(DATA_DIR / "knowledge.txt")
+        # 各処理モードに応じて処理を実行
+        if request.mode == ProcessingMode.LLM_ONLY:
+            result = await process_llm_only(request.query, demo_mode=request.demo_mode)
 
-        mode_mapping = {
-            ProcessingMode.LLM_ONLY: ExecutionMode.LLM_ONLY,
-            ProcessingMode.PROMPT_STUFFING: ExecutionMode.PROMPT_STUFFING,
-            ProcessingMode.RAG_ONLY: ExecutionMode.RAG_ONLY,
-            ProcessingMode.FUNCTION_CALLING: ExecutionMode.FUNCTION_CALLING,
-            ProcessingMode.RAG_FUNCTION_CALLING: ExecutionMode.RAG_FUNCTION_CALLING,
-        }
+        elif request.mode == ProcessingMode.PROMPT_STUFFING:
+            result = await process_prompt_stuffing(request.query,
+                                                   DATA_DIR / "knowledge.txt",
+                                                   demo_mode=request.demo_mode)
 
-        engine = engine_factory.create_engine(mode_mapping[request.mode])
+        elif request.mode == ProcessingMode.RAG_ONLY:
+            result = await process_rag_only(request.query,
+                                            DATA_DIR / "knowledge.txt",
+                                            demo_mode=request.demo_mode)
 
-        # デモモードの場合は遅延を入れる
-        if request.demo_mode:
-            await asyncio.sleep(1.0)  # 初期遅延
+        elif request.mode == ProcessingMode.FUNCTION_CALLING:
+            result = await process_function_calling_only(request.query, demo_mode=request.demo_mode)
 
-        # 処理実行
-        result = await engine.process_async(request.query, demo_mode=request.demo_mode)
+        elif request.mode == ProcessingMode.RAG_FUNCTION_CALLING:
+            result = await process_rag_plus_function_calling(request.query,
+                                                             DATA_DIR / "knowledge.txt",
+                                                             demo_mode=request.demo_mode)
+
+        else:
+            raise ValueError(f"Unknown processing mode: {request.mode}")
 
         execution_time = time.time() - start_time
 
-        # 出力トークン数計算
+        # トークン数計算（実際のプロンプトを使用）
+        actual_prompt = result.get("actual_prompt", request.query)
+        input_tokens = count_tokens(actual_prompt)
         output_tokens = count_tokens(result["response"])
         total_tokens = input_tokens + output_tokens
 
@@ -396,8 +408,6 @@ async def delete_all_logs():
 @app.get("/auth/status")
 async def check_auth_status():
     """Google Cloud認証状況を確認"""
-    from env_utils import check_google_cloud_auth
-
     try:
         auth_available = check_google_cloud_auth()
         project_id = get_google_cloud_project()
