@@ -1,6 +1,8 @@
-# 構造化RAG比較システム
+# LLM情報提供手法比較システム
 
-このプロジェクトは、LLMに外部情報を与えるための複数の手法を比較・検証する目的で、5つの異なるパターンのRAG実装を提供する**フルスタックWebアプリケーション**です。PythonのFastAPIバックエンドとNext.jsフロントエンドで構築されており、デモモード・実行ログ・トークン数表示などの高度な機能を備えています。
+このプロジェクトは、LLMに外部情報を与えるための複数の手法を統一環境で比較・検証する**フルスタックWebアプリケーション**です。PythonのFastAPIバックエンドとNext.jsフロントエンドで構築されており、デモモード・実行ログ・トークン数表示などの高度な機能を備えています。
+
+**5つの情報提供アプローチ**：LLM単体、プロンプトスタッフィング、RAG、Function Calling、RAG+Function Callingを同一条件下で比較検証できます。
 
 ## 📁 プロジェクト構成
 
@@ -32,17 +34,160 @@ rag-sample-codes/
 
 ## 🎯 システム機能
 
+### 📊 5つの情報提供手法の可視化比較
+
+各手法の処理フローと登場要素を統一して比較できます：
+
+#### 手法1: LLM単体利用（ベースライン）
+
+```mermaid
+sequenceDiagram
+    participant User as ユーザー
+    participant UI as WebUI
+    participant API as FastAPI
+    participant LLM as Gemini LLM
+    
+    User->>UI: 質問入力
+    UI->>API: POST /process (llm_only)
+    API->>LLM: 質問をそのまま送信
+    LLM->>API: 回答生成
+    API->>UI: 結果返却
+    UI->>User: 回答表示
+    
+    Note over LLM: 外部情報なし  <br/>内蔵知識のみ
+```
+
+#### 手法2: プロンプトスタッフィング
+
+```mermaid
+sequenceDiagram
+    participant User as ユーザー
+    participant UI as WebUI
+    participant API as FastAPI
+    participant KB as Knowledge Base
+    participant LLM as Gemini LLM
+    
+    User->>UI: 質問入力
+    UI->>API: POST /process (prompt_stuffing)
+    API->>KB: 全データ読み込み
+    KB->>API: knowledge.txt全文
+    API->>LLM: 質問+全情報を結合送信
+    LLM->>API: 回答生成
+    API->>UI: 結果返却
+    UI->>User: 回答表示
+    
+    Note over KB,LLM: 全情報を  <br/>プロンプトに埋め込み
+```
+
+#### 手法3: RAGのみ
+
+```mermaid
+sequenceDiagram
+    participant User as ユーザー
+    participant UI as WebUI
+    participant API as FastAPI
+    participant VectorDB as Vector Store
+    participant Embed as Embeddings
+    participant LLM as Gemini LLM
+    
+    User->>UI: 質問入力
+    UI->>API: POST /process (rag_only)
+    API->>Embed: 質問をベクトル化
+    Embed->>API: 質問ベクトル
+    API->>VectorDB: 類似検索
+    VectorDB->>API: 関連文書
+    API->>LLM: 質問+関連文書
+    LLM->>API: 回答生成
+    API->>UI: 結果返却
+    UI->>User: 回答表示
+    
+    Note over VectorDB: FAISS  <br/>ベクトル検索
+```
+
+#### 手法4: Function Callingのみ
+
+```mermaid
+sequenceDiagram
+    participant User as ユーザー
+    participant UI as WebUI
+    participant API as FastAPI
+    participant LLM as Gemini LLM
+    participant Tools as Function Tools
+    participant KB as Knowledge Base
+    
+    User->>UI: 質問入力
+    UI->>API: POST /process (function_calling)
+    API->>LLM: 質問+利用可能ツール情報
+    LLM->>API: ツール使用判断
+    API->>Tools: 指定ツール実行
+    Tools->>KB: データ検索
+    KB->>Tools: 検索結果
+    Tools->>API: ツール実行結果
+    API->>LLM: ツール結果+質問
+    LLM->>API: 回答生成
+    API->>UI: 結果返却
+    UI->>User: 回答表示
+    
+    Note over LLM,Tools: LLMが自律的に  <br/>ツール選択・実行
+```
+
+#### 手法5: RAG + Function Calling（推奨）
+
+```mermaid
+sequenceDiagram
+    participant User as ユーザー
+    participant UI as WebUI
+    participant API as FastAPI
+    participant Agent as Agent Executor
+    participant VectorDB as Vector Store
+    participant Tools as Function Tools
+    participant LLM as Gemini LLM
+    participant KB as Knowledge Base
+    
+    User->>UI: 質問入力
+    UI->>API: POST /process (rag_function_calling)
+    API->>Agent: 質問+利用可能ツール
+    Agent->>LLM: 戦略立案
+    LLM->>Agent: RAG検索指示
+    Agent->>Tools: RAGツール実行
+    Tools->>VectorDB: ベクトル検索
+    VectorDB->>Tools: 関連文書
+    Tools->>Agent: 検索結果
+    Agent->>LLM: 検索結果+質問
+    LLM->>Agent: 最終回答
+    Agent->>API: 結果
+    API->>UI: 結果返却
+    UI->>User: 回答表示
+    
+    Note over Agent: 複数ツールを  <br/>組み合わせ活用
+```
+
+### 🔍 登場要素の比較表
+
+| 要素 | 手法1  <br/>LLM単体 | 手法2  <br/>スタッフィング | 手法3  <br/>RAG | 手法4  <br/>Function Calling | 手法5  <br/>RAG+FC |
+|------|:---:|:---:|:---:|:---:|:---:|
+| **LLM** | ✅ | ✅ | ✅ | ✅ | ✅ |
+| **Knowledge Base** | ❌ | ✅ | ✅ | ✅ | ✅ |
+| **Vector Store** | ❌ | ❌ | ✅ | ❌ | ✅ |
+| **Embeddings** | ❌ | ❌ | ✅ | ❌ | ✅ |
+| **Function Tools** | ❌ | ❌ | ❌ | ✅ | ✅ |
+| **Agent Executor** | ❌ | ❌ | ❌ | ❌ | ✅ |
+| **自律判断** | ❌ | ❌ | ❌ | ✅ | ✅ |
+| **効率性** | ⭐⭐⭐ | ⭐ | ⭐⭐⭐ | ⭐⭐ | ⭐⭐ |
+| **精度** | ⭐ | ⭐⭐⭐ | ⭐⭐⭐ | ⭐⭐ | ⭐⭐⭐ |
+| **柔軟性** | ⭐ | ⭐ | ⭐⭐ | ⭐⭐⭐ | ⭐⭐⭐ |
+
 ### Webアプリケーション機能
 
 - **直感的なUI**: モダンなレスポンシブWebインターフェース
-- **モード切替**: 5つのRAGパターンを簡単に切り替え可能
+- **モード切替**: 5つの情報提供手法を簡単に切り替え可能
 - **リアルタイム実行ステータス**: 処理の進行状況と中間生成物を表示
 - **デモモード**: プレゼンテーション用の遅延表示機能
 - **トークン使用量表示**: 入力・出力・総トークン数の詳細表示
 - **ナレッジベース編集**: ブラウザ上でknowledge.txtを直接編集可能
 - **実行ログ**: JSONL形式での詳細ログ自動生成・ダウンロード機能
 
-### 5つのRAG実装パターン
+### 5つの情報提供手法の実装
 
 #### 1. LLM単体利用
 - **目的**: 外部情報を一切与えなかった場合のベースライン確認
@@ -216,31 +361,175 @@ npm run dev
 
 ## 🏗️ アーキテクチャ
 
+### 全体システムアーキテクチャ
+
 ```mermaid
-┌─────────────────┐    HTTP API    ┌─────────────────┐
-│  Next.js        │ ◄─────────────► │  FastAPI        │
-│  Frontend       │    Port 3000   │  Backend        │
-│  (TypeScript)   │                │  (Python)       │
-└─────────────────┘                └─────────────────┘
-                                           │
-                                           ▼
-                                   ┌─────────────────┐
-                                   │  RAG Engines    │
-                                   │  - LLM Only     │
-                                   │  - Prompt Stuff │
-                                   │  - RAG Only     │
-                                   │  - Function Call│
-                                   │  - RAG + FC     │
-                                   └─────────────────┘
-                                           │
-                                           ▼
-                                   ┌─────────────────┐
-                                   │  External APIs  │
-                                   │  - Vertex AI    │
-                                   │  - FAISS        │
-                                   │  - HuggingFace  │
-                                   └─────────────────┘
+graph TD
+    Frontend[🖥️ Next.js Frontend<br/>TypeScript + Tailwind CSS<br/>Port: 3000] 
+    Backend[⚡ FastAPI Backend<br/>Python + LangChain<br/>Port: 8000]
+    
+    Frontend -.->|HTTP API| Backend
+    Backend -.->|JSON Response| Frontend
+    
+    Backend --> Engines[🔄 RAG Engines]
+    
+    Engines --> LLM[🤖 Vertex AI<br/>Gemini 2.5 Flash]
+    Engines --> Vector[🗄️ FAISS<br/>Vector Store]
+    Engines --> Embed[🔤 HuggingFace<br/>Embeddings]
+    Engines --> Tools[🔧 LangChain<br/>Function Tools]
+    Engines --> Agent[🎯 LangChain<br/>Agent Executor]
+    
+    Tools -.-> Vector
+    Tools -.-> Embed
+    Agent -.-> Tools
+    Agent -.-> LLM
+    
+    Backend --> Storage[(📁 File System)]
+    Storage --> KB[📚 knowledge.txt]
+    Storage --> Logs[📊 Execution Logs]
+    
+    Tools -.-> KB
+    
+    style Frontend fill:#e8f5e8,color:#000
+    style Backend fill:#fff3e0,color:#000
+    style LLM fill:#e1f5fe,color:#000
+    style Vector fill:#e8eaf6,color:#000
+    style Embed fill:#f1f8e9,color:#000
+    style Tools fill:#fff8e1,color:#000
+    style Agent fill:#ffebee,color:#000
+    style KB fill:#fce4ec,color:#000
+    style Logs fill:#f3e5f5,color:#000
+    style Engines fill:#f0f4c3,color:#000
+    style Storage fill:#e0f2e1,color:#000
 ```
+
+### 手法別システム構成図
+
+各情報提供手法の静的な構成要素と関係性を可視化：
+
+#### 手法1: LLM単体利用
+
+```mermaid
+graph LR
+    User[👤 ユーザー] --> UI[🖥️ WebUI]
+    UI --> API[⚡ FastAPI]
+    API --> LLM[🤖 Gemini LLM]
+    LLM --> API
+    API --> UI
+    UI --> User
+    
+    style LLM fill:#e1f5fe,color:#000
+    style User fill:#f3e5f5,color:#000
+    style UI fill:#e8f5e8,color:#000
+    style API fill:#fff3e0,color:#000
+```
+
+**特徴**: 最もシンプルな構成。外部情報源は一切使用せず、LLMの内蔵知識のみで回答を生成します。処理速度は最も高速ですが、知識の範囲が限定的です。
+
+#### 手法2: プロンプトスタッフィング
+
+```mermaid
+graph LR
+    User[👤 ユーザー] --> UI[🖥️ WebUI]
+    UI --> API[⚡ FastAPI]
+    API --> KB[📚 Knowledge Base]
+    KB --> API
+    API --> LLM[🤖 Gemini LLM]
+    LLM --> API
+    API --> UI
+    UI --> User
+    
+    style LLM fill:#e1f5fe,color:#000
+    style KB fill:#fce4ec,color:#000
+    style User fill:#f3e5f5,color:#000
+    style UI fill:#e8f5e8,color:#000
+    style API fill:#fff3e0,color:#000
+```
+
+**特徴**: Knowledge Baseから全データを読み込み、質問と一緒にプロンプトに埋め込みます。確実で理解しやすい手法ですが、データ量が多い場合はトークン消費量が大きくなります。
+
+#### 手法3: RAGのみ
+
+```mermaid
+graph LR
+    User[👤 ユーザー] --> UI[🖥️ WebUI]
+    UI --> API[⚡ FastAPI]
+    API --> Embed[🔤 Embeddings]
+    Embed --> VectorDB[(🗄️ Vector Store)]
+    VectorDB --> API
+    API --> LLM[🤖 Gemini LLM]
+    LLM --> API
+    API --> UI
+    UI --> User
+    
+    style LLM fill:#e1f5fe,color:#000
+    style VectorDB fill:#e8eaf6,color:#000
+    style Embed fill:#f1f8e9,color:#000
+    style User fill:#f3e5f5,color:#000
+    style UI fill:#e8f5e8,color:#000
+    style API fill:#fff3e0,color:#000
+```
+
+**特徴**: 質問をEmbeddingsでベクトル化し、Vector Storeから関連性の高い文書を検索して回答に活用します。効率的で拡張性が高く、現代的なRAGの基本形です。
+
+#### 手法4: Function Callingのみ
+
+```mermaid
+graph LR
+    User[👤 ユーザー] --> UI[🖥️ WebUI]
+    UI --> API[⚡ FastAPI]
+    API --> LLM[🤖 Gemini LLM]
+    LLM --> Tools[🔧 Function Tools]
+    Tools --> KB[📚 Knowledge Base]
+    KB --> Tools
+    Tools --> LLM
+    LLM --> API
+    API --> UI
+    UI --> User
+    
+    style LLM fill:#e1f5fe,color:#000
+    style Tools fill:#fff8e1,color:#000
+    style KB fill:#fce4ec,color:#000
+    style User fill:#f3e5f5,color:#000
+    style UI fill:#e8f5e8,color:#000
+    style API fill:#fff3e0,color:#000
+```
+
+**特徴**: LLMが自律的にFunction Toolsを選択・実行してKnowledge Baseから必要な情報を取得します。LLMの判断力を活用した動的な情報検索が可能です。
+
+#### 手法5: RAG + Function Calling（推奨）
+
+```mermaid
+graph LR
+    User[👤 ユーザー] --> UI[🖥️ WebUI]
+    UI --> API[⚡ FastAPI]
+    API --> Agent[🎯 Agent Executor]
+    Agent --> LLM[🤖 Gemini LLM]
+    LLM --> Agent
+    Agent --> Tools[🔧 Function Tools]
+    Tools --> Embed[🔤 Embeddings]
+    Tools --> VectorDB[(🗄️ Vector Store)]
+    Tools --> KB[📚 Knowledge Base]
+    Embed --> VectorDB
+    VectorDB --> Tools
+    KB --> Tools
+    Tools --> Agent
+    Agent --> API
+    API --> UI
+    UI --> User
+    
+    style LLM fill:#e1f5fe,color:#000
+    style Agent fill:#ffebee,color:#000
+    style Tools fill:#fff8e1,color:#000
+    style VectorDB fill:#e8eaf6,color:#000
+    style Embed fill:#f1f8e9,color:#000
+    style KB fill:#fce4ec,color:#000
+    style User fill:#f3e5f5,color:#000
+    style UI fill:#e8f5e8,color:#000
+    style API fill:#fff3e0,color:#000
+```
+
+**特徴**: Agent ExecutorがLLMとFunction Toolsをオーケストレーションし、必要に応じてRAG検索（Embeddings + Vector Store）と直接的なKnowledge Base検索の両方を活用します。最も柔軟で高度な情報検索が可能な推奨手法です。
 
 ## 📄 ライセンス
 

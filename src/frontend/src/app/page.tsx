@@ -162,7 +162,7 @@ export default function Home() {
       <div className="bg-white shadow-sm border-b">
         <div className="max-w-4xl mx-auto px-6 py-6">
           <h1 className="text-3xl font-bold text-gray-900 mb-2">
-            RAG比較システム
+            LLM情報提供手法比較システム
           </h1>
           <p className="text-gray-600 text-lg">
             5つの異なるLLM情報提供手法を比較・検証するシステム
@@ -183,7 +183,7 @@ export default function Home() {
               </div>
               <div>
                 <h2 className="text-xl font-bold text-gray-900">処理モードの選択</h2>
-                <p className="text-gray-600">使用するRAGパターンを選択してください</p>
+                <p className="text-gray-600">使用する情報提供手法を選択してください</p>
               </div>
             </div>
             
