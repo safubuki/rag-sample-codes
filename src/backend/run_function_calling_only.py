@@ -3,8 +3,11 @@
 目的: LLMが自律的にツール（関数）を呼び出す挙動の基本を実装する。
 """
 
+from env_utils import create_vertex_ai_llm, setup_environment
 from langchain.tools import tool
-from langchain_google_vertexai import ChatVertexAI
+
+# 環境変数を読み込み
+setup_environment()
 
 
 @tool
@@ -39,7 +42,7 @@ def main():
     print("=== 実装4: Function Callingのみ ===")
 
     # LLMを初期化し、ツールをバインド
-    llm = ChatVertexAI(model_name="gemini-2.5-flash", temperature=0.1)
+    llm = create_vertex_ai_llm()
     llm_with_tools = llm.bind_tools([search_manual])
 
     # 質問

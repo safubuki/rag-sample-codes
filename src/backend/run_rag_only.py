@@ -3,6 +3,7 @@
 目的: 現代的なRAGアーキテクチャの基本形を実装する。
 """
 
+from env_utils import create_vertex_ai_llm, setup_environment
 from langchain.prompts import ChatPromptTemplate
 from langchain.schema.output_parser import StrOutputParser
 from langchain.schema.runnable import RunnablePassthrough
@@ -11,6 +12,9 @@ from langchain_community.document_loaders import TextLoader
 from langchain_community.embeddings import HuggingFaceEmbeddings
 from langchain_community.vectorstores import FAISS
 from langchain_google_vertexai import ChatVertexAI
+
+# 環境変数を読み込み
+setup_environment()
 
 
 def main():
@@ -37,7 +41,9 @@ def main():
 
     # 3. RAGチェーン構築
     print("3. RAGチェーンを構築中...")
-    llm = ChatVertexAI(model_name="gemini-2.5-flash", temperature=0.1)
+
+    # Vertex AI LLMを初期化
+    llm = create_vertex_ai_llm()
 
     prompt_template = ChatPromptTemplate.from_template("""以下のコンテキスト情報を使用して質問に答えてください。
 コンテキストに答えが含まれていない場合は、「提供された情報では回答できません」と答えてください。

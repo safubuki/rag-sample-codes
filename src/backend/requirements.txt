@@ -20,6 +20,7 @@ sentence-transformers>=5.0.0
 
 # Google Cloud
 google-cloud-aiplatform>=1.101.0
+google-auth>=2.17.0
 
 # Utilities
 tiktoken>=0.7.0

@@ -31,10 +31,19 @@
 - Node.js 18以上
 - Google Cloud Project（Vertex AI API有効化）
 
+### 最短設定手順
+
+1. **Google Cloud設定**: [Google Cloud Console](https://console.cloud.google.com/)でプロジェクト作成・Vertex AI API有効化
+2. **認証設定**: プロジェクトルートに`.env`ファイル作成し、`GOOGLE_CLOUD_PROJECT=your-project-id`を記載
+3. **代替認証**: または`gcloud auth application-default login`でログイン
+
 ### インストール・実行
 
 ```bash
-# 1. バックエンド環境構築
+# 1. プロジェクトIDを設定（必須）
+echo "GOOGLE_CLOUD_PROJECT=your-actual-project-id" > .env
+
+# 2. バックエンド環境構築
 python -m venv .venv
 .venv\Scripts\activate  # Windows
 pip install -r src/backend/requirements.txt
@@ -613,9 +622,61 @@ rag-sample-codes/
 - Python 3.10以上
 - Node.js 18以上
 - Google Cloud Projectの設定（Vertex AI APIの有効化）
-- 適切な認証情報の設定
+- Google Cloud認証の設定
 
-### 2. インストール手順
+### 2. Google Cloud設定
+
+#### 2.1 Google Cloud Projectの作成・設定
+
+1. [Google Cloud Console](https://console.cloud.google.com/)にアクセス
+2. 新しいプロジェクトを作成するか、既存のプロジェクトを選択
+3. **Vertex AI API**を有効化:
+   ```bash
+   gcloud services enable aiplatform.googleapis.com
+   ```
+
+#### 2.2 認証設定
+
+以下のいずれかの方法で認証を設定してください：
+
+**方法A: サービスアカウントキー（推奨）**
+1. Google Cloud Consoleで「IAM & Admin」→「Service Accounts」に移動
+2. 新しいサービスアカウントを作成（ロール: Vertex AI User）
+3. キーファイル（JSON）をダウンロード
+4. 環境変数を設定:
+   ```bash
+   # Windows PowerShell
+   $env:GOOGLE_APPLICATION_CREDENTIALS="path\to\your\service-account-key.json"
+   $env:GOOGLE_CLOUD_PROJECT="your-project-id"
+   
+   # Linux/Mac
+   export GOOGLE_APPLICATION_CREDENTIALS="path/to/your/service-account-key.json"
+   export GOOGLE_CLOUD_PROJECT="your-project-id"
+   ```
+
+**方法B: gcloud CLIによる認証**
+```bash
+# Google Cloud CLIをインストール後
+gcloud auth application-default login
+gcloud config set project your-project-id
+```
+
+#### 2.3 環境変数設定ファイル
+
+プロジェクトルートに`.env`ファイルを作成:
+```bash
+# .envファイルを作成
+cp .env.example .env
+```
+
+`.env`ファイルを編集して、実際の値を設定:
+```bash
+GOOGLE_CLOUD_PROJECT=your-actual-project-id
+GOOGLE_APPLICATION_CREDENTIALS=path/to/your/service-account-key.json
+GOOGLE_CLOUD_REGION=us-central1
+```
+
+### 3. インストール手順
 
 #### バックエンド（Python）
 
@@ -706,10 +767,74 @@ npm run dev
 - 認証・権限管理
 - デプロイメント対応
 
-## 📄 ライセンス
+## �️ トラブルシューティング
+
+### Google Cloud関連エラー
+
+**エラー**: `Unable to find your project. Please provide a project ID...`
+
+**原因**: Google CloudのプロジェクトIDが設定されていません。
+
+**対処法**:
+1. `.env`ファイルにプロジェクトIDを設定:
+   ```bash
+   GOOGLE_CLOUD_PROJECT=your-actual-project-id
+   ```
+2. または環境変数を設定:
+   ```bash
+   # Windows
+   set GOOGLE_CLOUD_PROJECT=your-project-id
+   # Linux/Mac
+   export GOOGLE_CLOUD_PROJECT=your-project-id
+   ```
+
+**エラー**: `File turtle-ai-project-bbe3c41d9409.json was not found.` または `DefaultCredentialsError`
+
+**原因**: Google Cloud認証情報が設定されていません。
+
+**対処法**:
+
+1. **サービスアカウントキーを使用する場合**:
+   ```bash
+   # キーファイルをダウンロード後、.envファイルに追加
+   GOOGLE_APPLICATION_CREDENTIALS=C:/path/to/your/service-account-key.json
+   ```
+
+2. **gcloud CLIを使用する場合** (推奨):
+   ```bash
+   # Google Cloud CLIをインストール後
+   gcloud auth application-default login
+   gcloud config set project your-project-id
+   ```
+
+3. **認証状況の確認**:
+   ```bash
+   # ブラウザまたはcurlで確認
+   curl http://localhost:8000/auth/status
+   ```
+
+**エラー**: `Authentication failed` または `Credentials not found`
+
+**対処法**:
+1. サービスアカウントキーを使用する場合:
+   ```bash
+   set GOOGLE_APPLICATION_CREDENTIALS=path\to\service-account-key.json
+   ```
+2. gcloud認証を使用する場合:
+   ```bash
+   gcloud auth application-default login
+   ```
+
+### その他のエラー
+
+- **バックエンドが起動しない**: `pip install -r src/backend/requirements.txt`で依存関係を再インストール
+- **フロントエンドが起動しない**: `npm install`で依存関係を再インストール
+- **ナレッジベースが見つからない**: `data/knowledge.txt`ファイルが存在することを確認
+
+## �📄 ライセンス
 
 このプロジェクトはMITライセンスの下で公開されています。詳細は [LICENSE](LICENSE) ファイルを参照してください。
 
 ---
 
-**注意**: このプロジェクトを実行するには、Google Cloud Projectでの適切な設定とVertex AI APIの有効化が必要です。
+**重要**: このプロジェクトを実行するには、Google Cloud ProjectでのVertex AI API有効化と適切な認証設定が必要です。上記のクイックスタートガイドに従って設定を行ってください。

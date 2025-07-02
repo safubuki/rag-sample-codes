@@ -15,12 +15,26 @@ from typing import Dict, List, Optional
 import structlog
 import tiktoken
 import uvicorn
+from env_utils import get_google_cloud_project, setup_environment
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from logger_config import setup_logging
 from pydantic import BaseModel
 from rag_engines import ExecutionMode, RAGEngineFactory
+
+# 環境変数を読み込み
+setup_environment()
+
+# Google Cloud Project設定の確認
+project_id = get_google_cloud_project()
+if not project_id:
+    print("警告: GOOGLE_CLOUD_PROJECT環境変数が設定されていません。")
+    print("以下のいずれかの方法でプロジェクトIDを設定してください:")
+    print("1. .envファイルでGOOGLE_CLOUD_PROJECT=your-project-idを設定")
+    print("2. 環境変数を設定: set GOOGLE_CLOUD_PROJECT=your-project-id (Windows)")
+    print("3. gcloud config set project your-project-id")
+    # 実行は継続（デフォルトプロジェクトがある場合は動作する可能性がある）
 
 # ログ設定
 setup_logging()
@@ -241,8 +255,22 @@ async def process_query(request: ProcessRequest):
                                log_file=log_filename)
 
     except Exception as e:
-        logger.error("Processing failed", error=str(e))
-        raise HTTPException(status_code=500, detail=str(e))
+        error_message = str(e)
+        logger.error("Processing failed", error=error_message)
+
+        # Google Cloud認証関連のエラーの場合、より詳細な情報を提供
+        if "DefaultCredentialsError" in error_message or "was not found" in error_message:
+            detailed_error = (f"Google Cloud認証エラー: {error_message}\n\n"
+                              "解決方法:\n"
+                              "1. サービスアカウントキーを設定:\n"
+                              "   - .envファイルでGOOGLE_APPLICATION_CREDENTIALS=path/to/key.jsonを設定\n"
+                              "2. gcloud CLIで認証:\n"
+                              "   - gcloud auth application-default login\n"
+                              "3. プロジェクトIDを確認:\n"
+                              "   - .envファイルでGOOGLE_CLOUD_PROJECT=your-project-idを設定")
+            raise HTTPException(status_code=500, detail=detailed_error)
+
+        raise HTTPException(status_code=500, detail=error_message)
 
 
 @app.get("/logs")
@@ -269,6 +297,30 @@ async def get_log_file(filename: str):
         raise HTTPException(status_code=404, detail="Log file not found")
 
     return FileResponse(path=log_path, filename=filename, media_type="application/json")
+
+
+@app.get("/auth/status")
+async def check_auth_status():
+    """Google Cloud認証状況を確認"""
+    from env_utils import check_google_cloud_auth
+
+    try:
+        auth_available = check_google_cloud_auth()
+        project_id = get_google_cloud_project()
+
+        return {
+            "authenticated": auth_available,
+            "project_id": project_id,
+            "status": "認証済み" if auth_available else "認証が必要",
+            "message": "Vertex AIを使用できます" if auth_available else "認証設定が必要です"
+        }
+    except Exception as e:
+        return {
+            "authenticated": False,
+            "project_id": None,
+            "status": "エラー",
+            "message": f"認証チェック中にエラーが発生しました: {str(e)}"
+        }
 
 
 if __name__ == "__main__":

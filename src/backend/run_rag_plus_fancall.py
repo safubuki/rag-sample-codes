@@ -3,6 +3,7 @@
 目的: RAGの強力な検索能力をツール化し、LLMに他のツールと使い分けさせる、最も高度で推奨される構成を実装する。
 """
 
+from env_utils import create_vertex_ai_llm, setup_environment
 from langchain.agents import AgentExecutor, create_tool_calling_agent
 from langchain.prompts import ChatPromptTemplate
 from langchain.text_splitter import RecursiveCharacterTextSplitter
@@ -11,6 +12,9 @@ from langchain_community.document_loaders import TextLoader
 from langchain_community.embeddings import HuggingFaceEmbeddings
 from langchain_community.vectorstores import FAISS
 from langchain_google_vertexai import ChatVertexAI
+
+# 環境変数を読み込み
+setup_environment()
 
 # グローバル変数でretrieverを保持
 retriever = None
@@ -87,7 +91,7 @@ def main():
     print("2. エージェントを構築中...")
 
     # LLMを初期化
-    llm = ChatVertexAI(model_name="gemini-2.5-flash", temperature=0.1)
+    llm = create_vertex_ai_llm()
 
     # ツールリストを定義
     tools = [search_knowledge_base, get_robot_serial_number]

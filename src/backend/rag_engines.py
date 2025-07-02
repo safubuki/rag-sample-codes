@@ -4,6 +4,7 @@ RAGエンジンの実装
 """
 
 import asyncio
+import os
 import time
 from abc import ABC, abstractmethod
 from enum import Enum
@@ -11,6 +12,9 @@ from pathlib import Path
 from typing import Any, Dict, List
 
 import structlog
+from dotenv import load_dotenv
+from env_utils import (check_google_cloud_auth, create_vertex_ai_llm, get_google_cloud_project,
+                       get_google_credentials, setup_environment)
 from langchain.agents import AgentExecutor, create_tool_calling_agent
 from langchain.prompts import ChatPromptTemplate
 from langchain.schema.output_parser import StrOutputParser
@@ -21,6 +25,9 @@ from langchain_community.document_loaders import TextLoader
 from langchain_community.embeddings import HuggingFaceEmbeddings
 from langchain_community.vectorstores import FAISS
 from langchain_google_vertexai import ChatVertexAI
+
+# 環境変数を読み込み
+setup_environment()
 
 logger = structlog.get_logger()
 
@@ -38,7 +45,24 @@ class BaseRAGEngine(ABC):
 
     def __init__(self, knowledge_path: Path):
         self.knowledge_path = knowledge_path
-        self.llm = ChatVertexAI(model_name="gemini-2.5-flash", temperature=0.1)
+
+        # Google Cloud プロジェクトIDを取得
+        project_id = get_google_cloud_project()
+        if not project_id:
+            logger.warning("GOOGLE_CLOUD_PROJECT環境変数が設定されていません。デフォルトプロジェクトを使用します。")
+
+        # 認証状態をチェック
+        auth_available = check_google_cloud_auth()
+
+        try:
+            # Vertex AI LLMを初期化（共通関数を使用）
+            self.llm = create_vertex_ai_llm()
+            logger.info("Vertex AI LLMの初期化が成功しました")
+        except Exception as e:
+            logger.error(f"Vertex AI LLMの初期化に失敗しました: {e}")
+            logger.info("認証設定を確認してください")
+            # エラーを再発生させて呼び出し元で適切にハンドリング
+            raise
 
     @abstractmethod
     async def process_async(self, query: str, demo_mode: bool = False) -> Dict[str, Any]:

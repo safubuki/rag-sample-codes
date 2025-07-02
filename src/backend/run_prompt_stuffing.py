@@ -3,12 +3,15 @@
 目的: LLMの広大なコンテキストウィンドウを使い、力技で全ての情報を与える手法の挙動を確認する。
 """
 
-from langchain_google_vertexai import ChatVertexAI
+from env_utils import create_vertex_ai_llm, setup_environment
+
+# 環境変数を読み込み
+setup_environment()
 
 
 def main():
     # ChatVertexAIをgemini-2.5-flashモデルで初期化
-    llm = ChatVertexAI(model_name="gemini-2.5-flash", temperature=0.1)
+    llm = create_vertex_ai_llm()
 
     # knowledge.txtの全内容を読み込み
     with open("knowledge.txt", "r", encoding="utf-8") as f:
