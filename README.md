@@ -599,242 +599,215 @@ rag-sample-codes/
   - verbose=Trueで思考プロセスが見える
 - **利点**: 最も柔軟で実用的
 
-### テストクエリ
+### RAG精度改善のベストプラクティス
 
-すべての実装で共通のテストクエリを使用できます：
+RAGシステムの検索精度が低い場合の改善手法について、本プロジェクトでの実装経験に基づいてまとめます。
 
-「エラーコードE-404の対処法は？」
+#### 一般的な問題とその原因
 
-このクエリは、knowledge.txtに含まれる具体的な情報（E-404エラーの対処法）を問うものです。
+RAGシステムでよく発生する問題：
 
-### 期待される結果の比較
+1. **具体的なクエリは成功するが、広い概念のクエリで失敗する**
+   - 例：「200時間メンテナンス」(成功) vs 「定期メンテナンス情報」(失敗)
 
-1. **LLM単体**: 一般的な知識に基づく曖昧な回答
-2. **プロンプトスタッフィング**: 完全で正確な回答（トークン消費大）
-3. **RAGのみ**: 関連性の高い正確な回答
-4. **Function Calling**: ツール使用による動的な情報検索
-5. **RAG + Function Calling**: 最も柔軟で実用的な回答
+2. **関連性の低いチャンクが上位に来る**
+   - ベクトル検索のみに依存した場合によく発生
 
-## ✍🏻詳細セットアップと使用方法
+3. **情報の断片化により文脈が失われる**
+   - チャンクサイズが小さすぎる場合
 
-### 1. 前提条件
+#### 原因分析
 
-- Python 3.10以上
-- Node.js 18以上
-- Google Cloud Projectの設定（Vertex AI APIの有効化）
-- Google Cloud認証の設定
+| 問題 | 原因 | 影響 |
+|------|------|------|
+| セクション情報の断片化 | チャンクサイズが小さすぎる（例：500文字） | 文脈が失われ、関連情報が分離される |
+| 不適切な検索結果 | ベクトル検索のみに依存 | 広い概念のクエリで関連性の低いチャンクが上位に来る |
+| 検索候補不足 | 検索範囲が制限されている（例：3チャンクのみ） | 十分な候補チャンクを取得できない |
+| セクション境界の無視 | セクションヘッダーを考慮しない分割 | 情報が断片化し、構造が失われる |
 
-### 2. Google Cloud設定
+#### 実装した改善手法
 
-#### 2.1 Google Cloud Projectの作成・設定
+本プロジェクトの`run_rag_only.py`で実装した改善手法：
 
-1. [Google Cloud Console](https://console.cloud.google.com/)にアクセス
-2. 新しいプロジェクトを作成するか、既存のプロジェクトを選択
-3. **Vertex AI API**を有効化:
-   ```bash
-   gcloud services enable aiplatform.googleapis.com
-   ```
+##### 1. チャンクサイズとオーバーラップの最適化
 
-#### 2.2 認証設定
+```python
+# 改善前
+text_splitter = RecursiveCharacterTextSplitter(
+    chunk_size=500,
+    chunk_overlap=50,
+    separators=["\n\n", "\n", "。", "、", " ", ""]
+)
 
-以下のいずれかの方法で認証を設定してください：
-
-**方法A: サービスアカウントキー（推奨）**
-1. Google Cloud Consoleで「IAM & Admin」→「Service Accounts」に移動
-2. 新しいサービスアカウントを作成（ロール: Vertex AI User）
-3. キーファイル（JSON）をダウンロード
-4. 環境変数を設定:
-   ```bash
-   # Windows PowerShell
-   $env:GOOGLE_APPLICATION_CREDENTIALS="path\to\your\service-account-key.json"
-   $env:GOOGLE_CLOUD_PROJECT="your-project-id"
-   
-   # Linux/Mac
-   export GOOGLE_APPLICATION_CREDENTIALS="path/to/your/service-account-key.json"
-   export GOOGLE_CLOUD_PROJECT="your-project-id"
-   ```
-
-**方法B: gcloud CLIによる認証**
-```bash
-# Google Cloud CLIをインストール後
-gcloud auth application-default login
-gcloud config set project your-project-id
+# 改善後
+text_splitter = RecursiveCharacterTextSplitter(
+    chunk_size=800,       # 500 → 800文字（コンテキスト保持向上）
+    chunk_overlap=150,    # 50 → 150文字（情報断片化防止）
+    separators=["## ", "\n\n", "\n", "。", "、", " ", ""]  # セクションヘッダーを優先
+)
 ```
 
-#### 2.3 環境変数設定ファイル
+**効果**: セクション情報を保持し、文脈の断片化を防ぐ
 
-プロジェクトルートに`.env`ファイルを作成:
-```bash
-# .envファイルを作成
-cp .env.example .env
+##### 2. ハイブリッド検索の実装
+
+```python
+# ベクトル検索 + キーワードベース検索
+retrieved_docs = retriever.get_relevant_documents(query)
+
+# メンテナンス関連クエリの特別処理
+maintenance_keywords = ["メンテナンス", "定期", "保守", "点検", "交換", "清掃"]
+is_maintenance_query = any(keyword in query for keyword in maintenance_keywords)
+
+if is_maintenance_query:
+    # メンテナンス関連のチャンクを明示的に検索
+    maintenance_docs = []
+    for doc in splits:
+        if any(keyword in doc.page_content for keyword in maintenance_keywords):
+            maintenance_docs.append(doc)
+    
+    # 既存の検索結果に追加（重複排除）
+    existing_content = {doc.page_content for doc in retrieved_docs}
+    for doc in maintenance_docs:
+        if doc.page_content not in existing_content:
+            retrieved_docs.append(doc)
+```
+**効果**: 特定のドメイン知識（メンテナンス、エラーコードなど）の検索精度向上
+
+##### 3. 検索範囲の拡大
+
+```python
+# 改善前: 最大3チャンク
+max_chunks = min(3, len(splits))
+
+# 改善後: 最大5チャンク
+max_chunks = min(5, len(splits))
+retriever = vectorstore.as_retriever(search_kwargs={"k": max_chunks})
 ```
 
-`.env`ファイルを編集して、実際の値を設定:
-```bash
-GOOGLE_CLOUD_PROJECT=your-actual-project-id
-GOOGLE_APPLICATION_CREDENTIALS=path/to/your/service-account-key.json
-GOOGLE_CLOUD_REGION=us-central1
+**効果**: より多くの候補から関連情報を選択可能
+
+##### 4. デバッグ情報の強化
+
+```python
+# 検索処理の可視化
+search_debug_info = f"検索されたチャンク: {len(retrieved_docs)}個"
+if is_maintenance_query:
+    search_debug_info += f", メンテナンス関連クエリとして処理"
+
+intermediate_steps.append({
+    "step": "retrieve",
+    "debug_info": search_debug_info,
+    "retrieved_content_preview": context[:200] + "..." if len(context) > 200 else context,
+})
 ```
 
-### 3. インストール手順
+**効果**: 検索処理の透明性向上、トラブルシューティングの容易化
 
-#### バックエンド（Python）
+#### 改善結果
 
-```bash
-# 仮想環境作成・有効化
-python -m venv .venv
-.venv\Scripts\activate  # Windows
-# source .venv/bin/activate  # Linux/Mac
+| クエリタイプ | 改善前 | 改善後 | 改善内容 |
+|--------------|--------|--------|----------|
+| 具体的クエリ<br/>「200時間メンテナンス」 | ✅ 成功 | ✅ 成功 | 変わらず正確 |
+| 広い概念クエリ<br/>「定期メンテナンス情報」 | ❌ 失敗<br/>「情報は記載されていません」 | ✅ 成功<br/>全メンテナンススケジュール提供 | **大幅改善** |
+| エラーコード<br/>「E-404対処法」 | ✅ 成功 | ✅ 成功 | より安定的 |
+| 安全規定<br/>「安全規定について」 | △ 部分的 | ✅ 包括的 | 完全性向上 |
 
-# 依存関係インストール
-pip install -r src/backend/requirements.txt
-```
+#### 追加の改善手法（未実装）
 
-#### フロントエンド（Node.js）
+さらなる精度向上のために検討可能な手法：
 
-```bash
-cd src/frontend
-npm install
-```
+1. **リランキング**: セマンティック類似度による検索結果の再順位付け
+2. **クエリ拡張**: 同義語や関連語を追加してクエリを拡張
+3. **階層的検索**: セクション単位での粗い検索→詳細検索の2段階検索
+4. **ファインチューニング**: ドメイン特化の埋め込みモデル使用
+5. **グラフRAG**: 知識グラフを活用した構造化検索
 
-### 3. 実行方法
+#### 実装時の注意点
 
-#### 開発サーバー起動
+- **チャンクサイズ**: 大きすぎるとノイズが増加、小さすぎると文脈が失われる
+- **オーバーラップ**: 適切な範囲（チャンクサイズの15-20%程度）で設定
+- **キーワード検索**: ドメイン知識に基づく適切なキーワード選定が重要
+- **デバッグ情報**: 本番環境では無効化してパフォーマンスを確保
 
-```bash
-# バックエンド起動（ターミナル1）
-python src/backend/main.py
+この改善により、RAGシステムは特定の情報検索と広い概念の理解の両方で高い精度を実現できます。
 
-# フロントエンド起動（ターミナル2）  
-cd src/frontend
-npm run dev
-```
+### 開発・改善プロセスから得られた知見
 
-#### アプリケーションへのアクセス
+本プロジェクトの開発過程で得られた実践的な知見をまとめます。
 
-- **フロントエンド**: <http://localhost:3000>
-- **バックエンドAPI**: <http://localhost:8000>
-- **API仕様書**: <http://localhost:8000/docs>
+#### システム設計・アーキテクチャ
 
-### 4. 使用方法
+**統一的な比較環境の重要性**
+- 同一データ・同一質問での比較により、各手法の特性が明確に把握できた
+- モジュール化された設計により、個別手法の改善が他に影響せず実施可能
 
-1. ブラウザで <http://localhost:3000> にアクセス
-2. 処理モードを選択（5つのパターンから選択）
-3. 質問を入力（例: 「エラーコードE-404の対処法は？」）
-4. 「送信」ボタンをクリック
-5. リアルタイムで処理状況・結果・トークン数を確認
-6. 必要に応じてナレッジベースを編集
-7. 実行ログをダウンロード
+**ログとデバッグ機能の価値**
+- 詳細なログ（実際のプロンプト、中間ステップ、実行時間）により問題特定が容易
+- デバッグ情報により検索プロセスの透明性が確保され、改善方向が明確化
 
-## 📊 ログフォーマット
+#### RAG実装のベストプラクティス
 
-実行ログは`logs/`フォルダに`YYYYMMDDHHMMSS_llm-rag-exp.jsonl`形式で保存されます：
+**段階的改善アプローチの有効性**
+1. **ベースライン確立**: 基本的なRAG実装で全体の動作を確認
+2. **問題特定**: 具体例での成功/失敗パターンを詳細分析
+3. **原因分析**: チャンクサイズ、検索アルゴリズム、セクション構造を検証
+4. **改善実装**: 一つずつ改善手法を追加し、効果を測定
+5. **検証・調整**: 複数のクエリタイプで動作を確認
 
-```json
-{
-  "timestamp": "2025-07-02T15:30:45.123456",
-  "execution_mode": "rag_function_calling",
-  "query": "エラーコードE-404の対処法は？",
-  "response": "...",
-  "input_tokens": 150,
-  "output_tokens": 200,
-  "total_tokens": 350,
-  "execution_time": 3.45,
-  "intermediate_steps": [...],
-  "demo_mode": false
-}
-```
+**効果的な問題発見手法**
+- **対照的なテストケース**: 成功例と失敗例の比較による問題の明確化
+- **実際のプロンプト確認**: LLMに送られる最終プロンプトの内容検証
+- **中間ステップ分析**: 検索→プロンプト構築→生成の各段階での検証
 
-## 🎓 学習ポイント
+#### 技術選択の判断基準
 
-- RAGの基本的な仕組みとメリット
-- Function Callingの自律性と柔軟性
-- プロンプトスタッフィングのシンプルさと制限
-- LLM単体の限界
-- RAG + Function Callingの組み合わせによる相乗効果
-- フルスタックWebアプリケーション開発
-- API設計とフロントエンド・バックエンド連携
+**手法選択の実践的指針**
 
-## 💡 次のステップ
+| 状況 | 推奨手法 | 理由 |
+|------|----------|------|
+| 小規模データ（<10KB） | プロンプトスタッフィング | シンプルで確実、トークン消費も現実的 |
+| 大規模データ（>100KB） | RAGのみ | 効率的、スケーラブル |
+| 動的データアクセス要件 | Function Calling | 柔軟性、リアルタイム性 |
+| 高精度・高信頼性要件 | RAG + Function Calling | 最も包括的、複数アプローチの利点を活用 |
+| 開発初期・MVP | LLM単体 → プロンプトスタッフィング | 段階的な複雑性の導入 |
 
-このシステムを基に、以下の拡張が可能です：
+#### 実装時の注意点とトラブルシューティング
 
-- 複数のデータソースへの対応
-- より高度なツールの追加
-- ストリーミング対応
-- マルチターン会話の実装
-- 評価メトリクスの追加
-- 認証・権限管理
-- デプロイメント対応
+**よくある問題と対処法**
 
-## �️ トラブルシューティング
+1. **検索精度の問題**
+   - 症状: 関連性の低い情報が取得される
+   - 対処: チャンクサイズ調整、ハイブリッド検索、キーワード検索の追加
 
-### Google Cloud関連エラー
+2. **トークン制限への対処**
+   - 症状: プロンプトが長すぎてエラー
+   - 対処: 検索結果の制限、要約処理、ストリーミング対応
 
-**エラー**: `Unable to find your project. Please provide a project ID...`
+3. **レスポンス速度の問題**
+   - 症状: 処理時間が長い
+   - 対処: ベクトルストアの最適化、並列処理、キャッシング
 
-**原因**: Google CloudのプロジェクトIDが設定されていません。
+4. **認証・環境設定エラー**
+   - 症状: Google Cloud認証失敗
+   - 対処: 環境変数確認、サービスアカウント設定、gcloud認証
 
-**対処法**:
-1. `.env`ファイルにプロジェクトIDを設定:
-   ```bash
-   GOOGLE_CLOUD_PROJECT=your-actual-project-id
-   ```
-2. または環境変数を設定:
-   ```bash
-   # Windows
-   set GOOGLE_CLOUD_PROJECT=your-project-id
-   # Linux/Mac
-   export GOOGLE_CLOUD_PROJECT=your-project-id
-   ```
+#### プロダクション運用への展開指針
 
-**エラー**: `File turtle-ai-project-bbe3c41d9409.json was not found.` または `DefaultCredentialsError`
+**段階的デプロイメント**
+1. **開発環境**: 基本機能とローカルテスト
+2. **ステージング環境**: 実データでの性能・精度検証
+3. **本番環境**: 段階的ロールアウト、監視・ログ体制整備
 
-**原因**: Google Cloud認証情報が設定されていません。
+**監視・メンテナンス項目**
+- **性能メトリクス**: レスポンス時間、スループット、エラー率
+- **品質メトリクス**: 回答精度、ユーザー満足度、検索成功率
+- **コストメトリクス**: トークン消費量、API呼び出し回数、リソース使用量
 
-**対処法**:
+**継続的改善のサイクル**
+1. **ログ分析**: 失敗パターン、頻繁な質問タイプの特定
+2. **ナレッジベース更新**: 新しい情報の追加、古い情報の更新
+3. **検索アルゴリズム調整**: チューニングパラメータの最適化
+4. **新機能追加**: ユーザーフィードバックに基づく機能拡張
 
-1. **サービスアカウントキーを使用する場合**:
-   ```bash
-   # キーファイルをダウンロード後、.envファイルに追加
-   GOOGLE_APPLICATION_CREDENTIALS=C:/path/to/your/service-account-key.json
-   ```
-
-2. **gcloud CLIを使用する場合** (推奨):
-   ```bash
-   # Google Cloud CLIをインストール後
-   gcloud auth application-default login
-   gcloud config set project your-project-id
-   ```
-
-3. **認証状況の確認**:
-   ```bash
-   # ブラウザまたはcurlで確認
-   curl http://localhost:8000/auth/status
-   ```
-
-**エラー**: `Authentication failed` または `Credentials not found`
-
-**対処法**:
-1. サービスアカウントキーを使用する場合:
-   ```bash
-   set GOOGLE_APPLICATION_CREDENTIALS=path\to\service-account-key.json
-   ```
-2. gcloud認証を使用する場合:
-   ```bash
-   gcloud auth application-default login
-   ```
-
-### その他のエラー
-
-- **バックエンドが起動しない**: `pip install -r src/backend/requirements.txt`で依存関係を再インストール
-- **フロントエンドが起動しない**: `npm install`で依存関係を再インストール
-- **ナレッジベースが見つからない**: `data/knowledge.txt`ファイルが存在することを確認
-
-## �📄 ライセンス
-
-このプロジェクトはMITライセンスの下で公開されています。詳細は [LICENSE](LICENSE) ファイルを参照してください。
-
----
-
-**重要**: このプロジェクトを実行するには、Google Cloud ProjectでのVertex AI API有効化と適切な認証設定が必要です。上記のクイックスタートガイドに従って設定を行ってください。
+この開発プロセスにより、理論的な知識だけでなく実践的なRAGシステム構築のノウハウを習得できます。
