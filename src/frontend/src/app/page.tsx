@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import axios from 'axios';
-import { Send, Settings, FileText, Download, Loader2, Database, Play, CheckCircle, ChevronDown, ChevronUp, Eye, EyeOff } from 'lucide-react';
+import { Send, Settings, FileText, Download, Loader2, Database, Play, CheckCircle, ChevronDown, ChevronUp, Eye, EyeOff, Trash2, X, Check } from 'lucide-react';
 import toast, { Toaster } from 'react-hot-toast';
 
 interface ProcessingMode {
@@ -28,6 +28,17 @@ interface ProcessResponse {
   log_file: string;
 }
 
+interface LogDetail {
+  filename: string;
+  timestamp: string;
+  execution_mode: string;
+  status: string;
+  execution_time: number;
+  total_tokens: number;
+  error_message?: string;
+  query: string;
+}
+
 const MODES: ProcessingMode[] = [
   { value: 'llm_only', label: 'LLM単体', description: '外部情報なしでLLMのみ', color: 'bg-gray-100 text-gray-800 border-gray-300' },
   { value: 'prompt_stuffing', label: 'プロンプトスタッフィング', description: '全情報をプロンプトに埋め込み', color: 'bg-blue-100 text-blue-800 border-blue-300' },
@@ -49,7 +60,7 @@ export default function Home() {
   const [currentStep, setCurrentStep] = useState('');
   const [progress, setProgress] = useState(0);
   const [demoMode, setDemoMode] = useState(false);
-  const [logFiles, setLogFiles] = useState<string[]>([]);
+  const [logFiles, setLogFiles] = useState<LogDetail[]>([]);
   const [showAdvancedOptions, setShowAdvancedOptions] = useState(false);
   const [showIntermediateSteps, setShowIntermediateSteps] = useState(false);
   const [showLogs, setShowLogs] = useState(false);
@@ -68,7 +79,7 @@ export default function Home() {
   const fetchLogFiles = async () => {
     try {
       const response = await axios.get('http://localhost:8000/logs');
-      setLogFiles(response.data.files);
+      setLogFiles(response.data.logs);
     } catch (error) {
       console.error('ログファイル一覧の取得に失敗:', error);
     }
@@ -149,6 +160,32 @@ export default function Home() {
       window.URL.revokeObjectURL(url);
     } catch (error) {
       toast.error('ログファイルのダウンロードに失敗しました');
+    }
+  };
+
+  // ログファイルを削除
+  const deleteLog = async (filename: string) => {
+    if (window.confirm(`ログファイル「${filename}」を削除しますか？`)) {
+      try {
+        await axios.delete(`http://localhost:8000/logs/${filename}`);
+        toast.success('ログファイルを削除しました');
+        fetchLogFiles();
+      } catch (error) {
+        toast.error('ログファイルの削除に失敗しました');
+      }
+    }
+  };
+
+  // 全ログファイルを削除
+  const deleteAllLogs = async () => {
+    if (window.confirm('すべてのログファイルを削除しますか？この操作は取り消せません。')) {
+      try {
+        await axios.delete('http://localhost:8000/logs');
+        toast.success('すべてのログファイルを削除しました');
+        fetchLogFiles();
+      } catch (error) {
+        toast.error('ログファイルの削除に失敗しました');
+      }
     }
   };
 
@@ -467,19 +504,111 @@ export default function Home() {
           
           {showLogs && (
             <div className="border-t p-4">
-              <div className="space-y-2 max-h-32 overflow-y-auto">
+              {logFiles.length > 0 && (
+                <div className="mb-4 flex justify-end">
+                  <button
+                    onClick={deleteAllLogs}
+                    className="flex items-center text-red-600 hover:text-red-700 text-sm font-medium"
+                  >
+                    <Trash2 className="mr-1" size={16} />
+                    全削除
+                  </button>
+                </div>
+              )}
+              
+              <div className="space-y-3 max-h-96 overflow-y-auto">
                 {logFiles.length > 0 ? (
-                  logFiles.map((file, index) => (
-                    <button
-                      key={index}
-                      onClick={() => downloadLog(file)}
-                      className="w-full text-left text-sm text-blue-600 hover:text-blue-700 hover:bg-blue-50 p-2 rounded transition-colors"
-                    >
-                      {file}
-                    </button>
+                  logFiles.map((log, index) => (
+                    <div key={index} className="border rounded-lg p-4 bg-gray-50">
+                      <div className="flex items-center justify-between mb-3">
+                        <div className="flex items-center">
+                          {/* ステータス表示 */}
+                          <div className={`flex items-center mr-3 px-2 py-1 rounded-full text-xs font-medium ${
+                            log.status === 'success' 
+                              ? 'bg-green-100 text-green-800' 
+                              : 'bg-red-100 text-red-800'
+                          }`}>
+                            {log.status === 'success' ? (
+                              <>
+                                <Check className="mr-1" size={12} />
+                                成功
+                              </>
+                            ) : (
+                              <>
+                                <X className="mr-1" size={12} />
+                                失敗
+                              </>
+                            )}
+                          </div>
+                          
+                          {/* 実行日時 */}
+                          <div className="text-sm text-gray-600">
+                            {log.timestamp ? new Date(log.timestamp).toLocaleString() : '不明'}
+                          </div>
+                        </div>
+                        
+                        {/* アクションボタン */}
+                        <div className="flex items-center space-x-2">
+                          <button
+                            onClick={() => downloadLog(log.filename)}
+                            className="flex items-center text-blue-600 hover:text-blue-700 text-sm"
+                          >
+                            <Download className="mr-1" size={14} />
+                            DL
+                          </button>
+                          <button
+                            onClick={() => deleteLog(log.filename)}
+                            className="flex items-center text-red-600 hover:text-red-700 text-sm"
+                          >
+                            <Trash2 className="mr-1" size={14} />
+                            削除
+                          </button>
+                        </div>
+                      </div>
+                      
+                      {/* ログ詳細情報 */}
+                      <div className="grid grid-cols-2 gap-4 text-sm">
+                        <div>
+                          <span className="font-medium text-gray-700">実行モード:</span>
+                          <span className="ml-2 text-gray-600">{log.execution_mode}</span>
+                        </div>
+                        <div>
+                          <span className="font-medium text-gray-700">実行時間:</span>
+                          <span className="ml-2 text-gray-600">{log.execution_time.toFixed(2)}秒</span>
+                        </div>
+                        <div>
+                          <span className="font-medium text-gray-700">トークン数:</span>
+                          <span className="ml-2 text-gray-600">{log.total_tokens.toLocaleString()}</span>
+                        </div>
+                        <div>
+                          <span className="font-medium text-gray-700">ファイル名:</span>
+                          <span className="ml-2 text-gray-600 font-mono text-xs">{log.filename}</span>
+                        </div>
+                      </div>
+                      
+                      {/* クエリ表示 */}
+                      {log.query && (
+                        <div className="mt-3">
+                          <span className="font-medium text-gray-700">クエリ:</span>
+                          <div className="mt-1 text-sm text-gray-600 bg-white p-2 rounded border">
+                            {log.query}
+                          </div>
+                        </div>
+                      )}
+                      
+                      {/* エラーメッセージ表示 */}
+                      {log.error_message && (
+                        <div className="mt-3">
+                          <span className="font-medium text-red-700">エラー:</span>
+                          <div className="mt-1 text-sm text-red-600 bg-red-50 p-2 rounded border border-red-200">
+                            {log.error_message}
+                          </div>
+                        </div>
+                      )}
+                    </div>
                   ))
                 ) : (
-                  <div className="text-gray-400 text-sm text-center py-4">
+                  <div className="text-gray-400 text-sm text-center py-8">
                     ログファイルがありません
                   </div>
                 )}

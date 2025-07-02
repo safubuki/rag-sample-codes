@@ -234,7 +234,9 @@ async def process_query(request: ProcessRequest):
             "total_tokens": total_tokens,
             "execution_time": execution_time,
             "intermediate_steps": result.get("intermediate_steps", []),
-            "demo_mode": request.demo_mode
+            "demo_mode": request.demo_mode,
+            "status": "success",
+            "error_message": None
         }
 
         # JSONLファイルに保存
@@ -256,6 +258,30 @@ async def process_query(request: ProcessRequest):
 
     except Exception as e:
         error_message = str(e)
+        execution_time = time.time() - start_time
+
+        # エラーログを記録
+        error_log_entry = {
+            "timestamp": datetime.now().isoformat(),
+            "execution_mode": request.mode,
+            "query": request.query,
+            "response": "",
+            "input_tokens": input_tokens,
+            "output_tokens": 0,
+            "total_tokens": input_tokens,
+            "execution_time": execution_time,
+            "intermediate_steps": [],
+            "demo_mode": request.demo_mode,
+            "status": "error",
+            "error_message": error_message
+        }
+
+        # エラーログもファイルに保存
+        error_log_filename = f"{timestamp}_{request.mode.value}-error.jsonl"
+        error_log_path = LOGS_DIR / error_log_filename
+        with open(error_log_path, "w", encoding="utf-8") as f:
+            f.write(json.dumps(error_log_entry, ensure_ascii=False) + "\n")
+
         logger.error("Processing failed", error=error_message)
 
         # Google Cloud認証関連のエラーの場合、より詳細な情報を提供
@@ -275,13 +301,47 @@ async def process_query(request: ProcessRequest):
 
 @app.get("/logs")
 async def list_logs():
-    """ログファイル一覧を取得"""
+    """ログファイル一覧と詳細情報を取得"""
     try:
-        log_files = []
+        log_details = []
         for log_file in LOGS_DIR.glob("*.jsonl"):
-            log_files.append(log_file.name)
+            try:
+                with open(log_file, "r", encoding="utf-8") as f:
+                    log_content = json.loads(f.read().strip())
 
-        return {"files": sorted(log_files, reverse=True)}
+                    log_details.append({
+                        "filename":
+                            log_file.name,
+                        "timestamp":
+                            log_content.get("timestamp", ""),
+                        "execution_mode":
+                            log_content.get("execution_mode", ""),
+                        "status":
+                            log_content.get("status", "unknown"),
+                        "execution_time":
+                            log_content.get("execution_time", 0),
+                        "total_tokens":
+                            log_content.get("total_tokens", 0),
+                        "error_message":
+                            log_content.get("error_message"),
+                        "query":
+                            log_content.get("query", "")[:100] +
+                            ("..." if len(log_content.get("query", "")) > 100 else "")
+                    })
+            except Exception as e:
+                # ログファイルの読み込みに失敗した場合もリストに含める
+                log_details.append({
+                    "filename": log_file.name,
+                    "timestamp": "",
+                    "execution_mode": "",
+                    "status": "error",
+                    "execution_time": 0,
+                    "total_tokens": 0,
+                    "error_message": f"ログファイルの読み込みに失敗: {str(e)}",
+                    "query": ""
+                })
+
+        return {"logs": sorted(log_details, key=lambda x: x["timestamp"], reverse=True)}
 
     except Exception as e:
         logger.error("Failed to list logs", error=str(e))
@@ -297,6 +357,40 @@ async def get_log_file(filename: str):
         raise HTTPException(status_code=404, detail="Log file not found")
 
     return FileResponse(path=log_path, filename=filename, media_type="application/json")
+
+
+@app.delete("/logs/{filename}")
+async def delete_log_file(filename: str):
+    """特定のログファイルを削除"""
+    try:
+        log_path = LOGS_DIR / filename
+        if not log_path.exists():
+            raise HTTPException(status_code=404, detail="ログファイルが見つかりません")
+
+        log_path.unlink()
+        logger.info(f"ログファイルを削除しました: {filename}")
+        return {"message": f"ログファイル '{filename}' を削除しました"}
+
+    except Exception as e:
+        logger.error("Failed to delete log file", error=str(e), filename=filename)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.delete("/logs")
+async def delete_all_logs():
+    """すべてのログファイルを削除"""
+    try:
+        deleted_count = 0
+        for log_file in LOGS_DIR.glob("*.jsonl"):
+            log_file.unlink()
+            deleted_count += 1
+
+        logger.info(f"すべてのログファイルを削除しました: {deleted_count}件")
+        return {"message": f"{deleted_count}件のログファイルを削除しました"}
+
+    except Exception as e:
+        logger.error("Failed to delete all logs", error=str(e))
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.get("/auth/status")
