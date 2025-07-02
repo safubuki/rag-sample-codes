@@ -100,27 +100,28 @@ graph TD
     Frontend -.->|HTTP API| Backend
     Backend -.->|JSON Response| Frontend
     
-    Backend --> Engines[🔄 RAG Engines]
+    Backend --> Controller{🔄 RAG Engines<br/>制御レイヤー<br/>5つの手法を切り替え}
     
-    Engines --> LLM[🤖 Vertex AI<br/>Gemini 2.5 Flash]
-    Engines --> Vector[🗄️ FAISS<br/>Vector Store]
-    Engines --> Embed[🔤 HuggingFace<br/>Embeddings]
-    Engines --> Tools[🔧 LangChain<br/>Function Tools]
-    Engines --> Agent[🎯 LangChain<br/>Agent Executor]
+    Controller -->|手法に応じて選択| LLM[🤖 Vertex AI<br/>Gemini 2.5 Flash]
+    Controller -->|RAG系で使用| Vector[🗄️ FAISS<br/>Vector Store]
+    Controller -->|RAG系で使用| Embed[🔤 HuggingFace<br/>Embeddings]
+    Controller -->|Function Calling系で使用| Tools[🔧 LangChain<br/>Function Tools]
+    Controller -->|手法5で使用| Agent[🎯 LangChain<br/>Agent Executor]
     
-    Tools -.-> Vector
-    Tools -.-> Embed
-    Agent -.-> Tools
-    Agent -.-> LLM
+    Tools -.->|RAG機能として| Vector
+    Tools -.->|RAG機能として| Embed
+    Agent -.->|ツール管理| Tools
+    Agent -.->|LLM呼び出し| LLM
     
     Backend --> Storage[(📁 File System)]
     Storage --> KB[📚 knowledge.txt]
     Storage --> Logs[📊 Execution Logs]
     
-    Tools -.-> KB
+    Tools -.->|データアクセス| KB
     
     style Frontend fill:#e8f5e8,color:#000
     style Backend fill:#fff3e0,color:#000
+    style Controller fill:#f0f4c3,color:#000,stroke:#666,stroke-width:3px
     style LLM fill:#e1f5fe,color:#000
     style Vector fill:#e8eaf6,color:#000
     style Embed fill:#f1f8e9,color:#000
@@ -128,7 +129,6 @@ graph TD
     style Agent fill:#ffebee,color:#000
     style KB fill:#fce4ec,color:#000
     style Logs fill:#f3e5f5,color:#000
-    style Engines fill:#f0f4c3,color:#000
     style Storage fill:#e0f2e1,color:#000
 ```
 
@@ -138,7 +138,7 @@ graph TD
 |------|------|----------|
 | 🖥️ **Next.js Frontend** | ユーザーインターフェース | TypeScript + Tailwind CSS、レスポンシブデザイン |
 | ⚡ **FastAPI Backend** | API サーバー | Python、LangChain統合、CORS対応 |
-| 🔄 **RAG Engines** | 情報提供手法の実装 | 5つの異なるパターンを切り替え可能 |
+| 🔄 **RAG Engines（制御レイヤー）** | 手法切り替え制御 | 5つの情報提供パターンを統一的に管理・実行 |
 | 🤖 **Vertex AI LLM** | 言語モデル | Google Gemini 2.5 Flash、テキスト生成 |
 | 🗄️ **FAISS Vector Store** | ベクトルデータベース | 高速類似検索、文書の埋め込み保存 |
 | 🔤 **HuggingFace Embeddings** | テキスト埋め込み | sentence-transformers、ベクトル変換 |
@@ -384,23 +384,38 @@ sequenceDiagram
     participant Tools as Function Tools
     participant LLM as Gemini LLM
     participant KB as Knowledge Base
+    participant Embed as Embeddings
     
     User->>UI: 質問入力
     UI->>API: POST /process (rag_function_calling)
     API->>Agent: 質問+利用可能ツール
     Agent->>LLM: 戦略立案
-    LLM->>Agent: RAG検索指示
-    Agent->>Tools: RAGツール実行
-    Tools->>VectorDB: ベクトル検索
-    VectorDB->>Tools: 関連文書
-    Tools->>Agent: 検索結果
+    
+    alt RAG検索が必要な場合
+        LLM->>Agent: RAG検索指示
+        Agent->>Tools: RAGツール実行
+        Tools->>Embed: 質問をベクトル化
+        Embed->>Tools: 質問ベクトル
+        Tools->>VectorDB: ベクトル検索
+        VectorDB->>Tools: 関連文書
+        Tools->>Agent: RAG検索結果
+    end
+    
+    alt 直接検索が必要な場合
+        LLM->>Agent: 直接検索指示
+        Agent->>Tools: 検索ツール実行
+        Tools->>KB: データ検索
+        KB->>Tools: 検索結果
+        Tools->>Agent: 直接検索結果
+    end
+    
     Agent->>LLM: 検索結果+質問
     LLM->>Agent: 最終回答
     Agent->>API: 結果
     API->>UI: 結果返却
     UI->>User: 回答表示
     
-    Note over Agent: 複数ツールを<br/>組み合わせ活用
+    Note over Agent: 複数ツールを<br/>組み合わせ活用<br/>状況に応じて選択
 ```
 
 ## 🔍 手法比較表
@@ -417,6 +432,61 @@ sequenceDiagram
 | **効率性** | ⭐⭐⭐ | ⭐ | ⭐⭐⭐ | ⭐⭐ | ⭐⭐ |
 | **精度** | ⭐ | ⭐⭐⭐ | ⭐⭐⭐ | ⭐⭐ | ⭐⭐⭐ |
 | **柔軟性** | ⭐ | ⭐ | ⭐⭐ | ⭐⭐⭐ | ⭐⭐⭐ |
+
+### 📝 評価指標の説明
+
+#### 🤖 自律判断
+**定義**: LLMが状況に応じて適切なツールや検索手法を自動選択する能力
+
+- **❌ なし**: 事前に決められた処理のみ実行
+- **✅ あり**: LLMが動的にツール選択・実行戦略を決定
+
+**読み手の判断基準**: 
+- **自律判断が重要な場合**: 多様な質問に対応、予期しない情報ニーズへの対応
+- **自律判断が不要な場合**: 決まったパターンの質問、予測可能な処理フロー
+
+#### ⚡ 効率性（処理速度・リソース消費）
+**定義**: レスポンス時間とトークン消費量のバランス
+
+- **⭐⭐⭐ 高**: 高速レスポンス、少ないトークン消費
+- **⭐⭐ 中**: 中程度の処理時間、適度なリソース使用
+- **⭐ 低**: 処理時間が長い、大量のトークン消費
+
+**読み手の判断基準**:
+- **高効率が重要**: リアルタイム応答、大量処理、コスト重視
+- **効率性より精度**: 複雑な分析、高品質な回答が必要
+
+#### 🎯 精度（回答の正確性・関連性）
+**定義**: 質問に対する回答の正確性と情報の関連性
+
+- **⭐⭐⭐ 高**: 外部情報を活用した正確で詳細な回答
+- **⭐⭐ 中**: 関連情報は取得できるが、情報選択に課題
+- **⭐ 低**: 限定的な知識による曖昧または不正確な回答
+
+**読み手の判断基準**:
+- **高精度が必要**: 専門的な質問、事実確認、正確性が重要な業務
+- **精度より速度**: 概要把握、ブレインストーミング、一般的な質問
+
+#### 🔧 柔軟性（適応性・拡張性）
+**定義**: 多様な質問や新しい要求に対する対応能力
+
+- **⭐⭐⭐ 高**: 複数の検索手法、動的な戦略変更、多様な情報源に対応
+- **⭐⭐ 中**: 限定的だが複数の情報取得手法を利用
+- **⭐ 低**: 固定的な処理、単一の情報源に依存
+
+**読み手の判断基準**:
+- **高柔軟性が重要**: 多様な業務、予期しない質問、将来の拡張性
+- **柔軟性より安定性**: 定型的な業務、予測可能な質問パターン
+
+### 💡 手法選択のガイドライン
+
+| 用途・要件 | 推奨手法 | 理由 |
+|------------|----------|------|
+| **プロトタイプ・検証** | 手法1 LLM単体 | 最速実装、基本性能確認 |
+| **小規模データ・確実性重視** | 手法2 スタッフィング | シンプル、確実、理解しやすい |
+| **大規模データ・効率重視** | 手法3 RAG | 高効率、拡張性、現代的手法 |
+| **動的・多様な要求** | 手法4 Function Calling | 柔軟性、自律性、カスタマイズ性 |
+| **本格運用・最高品質** | 手法5 RAG+FC | 総合力、実用性、将来性 |
 
 ## 🔧 技術詳細
 
@@ -536,7 +606,7 @@ rag-sample-codes/
 4. **Function Calling**: ツール使用による動的な情報検索
 5. **RAG + Function Calling**: 最も柔軟で実用的な回答
 
-## � 詳細セットアップと使用方法
+## ✍🏻詳細セットアップと使用方法
 
 ### 1. 前提条件
 
@@ -579,7 +649,7 @@ cd src/frontend
 npm run dev
 ```
 
-#### アクセス
+#### アプリケーションへのアクセス
 
 - **フロントエンド**: <http://localhost:3000>
 - **バックエンドAPI**: <http://localhost:8000>
