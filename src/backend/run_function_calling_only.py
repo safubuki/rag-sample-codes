@@ -125,14 +125,16 @@ async def process_function_calling_only(user_query: str, demo_mode: bool = False
             })
 
             # ツール結果を含めて再度LLMに問い合わせ
-            final_prompt = f"""以下のツール実行結果を基に、ユーザーの質問に答えてください。
+            final_prompt = f"""以下の製品取扱説明書（検索結果）を参考にして、質問に答えてください。
 
-質問: {user_query}
-
-ツール実行結果:
+=== 製品取扱説明書（検索結果） ===
 {tool_result}
 
-回答:"""
+=== 質問 ===
+{user_query}
+
+=== 回答 ===
+製品取扱説明書の内容に基づいて、正確な情報を提供してください。"""
 
             actual_prompt = final_prompt  # 実際に使用されたプロンプトを更新
 

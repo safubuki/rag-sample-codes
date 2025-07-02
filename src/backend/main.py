@@ -235,11 +235,12 @@ async def process_query(request: ProcessRequest):
         output_tokens = count_tokens(result["response"])
         total_tokens = input_tokens + output_tokens
 
-        # ログ出力
+        # ログ出力（詳細な情報を含む）
         log_entry = {
             "timestamp": datetime.now().isoformat(),
             "execution_mode": request.mode,
             "query": request.query,
+            "actual_prompt": actual_prompt,  # 実際にLLMに送信されたプロンプト
             "response": result["response"],
             "input_tokens": input_tokens,
             "output_tokens": output_tokens,
@@ -251,9 +252,9 @@ async def process_query(request: ProcessRequest):
             "error_message": None
         }
 
-        # JSONLファイルに保存
+        # JSONLファイルに保存（インデント付きで見やすく）
         with open(log_path, "w", encoding="utf-8") as f:
-            f.write(json.dumps(log_entry, ensure_ascii=False) + "\n")
+            f.write(json.dumps(log_entry, ensure_ascii=False, indent=4) + "\n")
 
         logger.info("Processing completed",
                     execution_time=execution_time,
@@ -277,6 +278,7 @@ async def process_query(request: ProcessRequest):
             "timestamp": datetime.now().isoformat(),
             "execution_mode": request.mode,
             "query": request.query,
+            "actual_prompt": request.query,  # エラー時は元の質問のみ
             "response": "",
             "input_tokens": input_tokens,
             "output_tokens": 0,
@@ -288,11 +290,11 @@ async def process_query(request: ProcessRequest):
             "error_message": error_message
         }
 
-        # エラーログもファイルに保存
+        # エラーログもファイルに保存（インデント付き）
         error_log_filename = f"{timestamp}_{request.mode.value}-error.jsonl"
         error_log_path = LOGS_DIR / error_log_filename
         with open(error_log_path, "w", encoding="utf-8") as f:
-            f.write(json.dumps(error_log_entry, ensure_ascii=False) + "\n")
+            f.write(json.dumps(error_log_entry, ensure_ascii=False, indent=4) + "\n")
 
         logger.error("Processing failed", error=error_message)
 

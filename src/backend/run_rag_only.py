@@ -39,10 +39,12 @@ async def process_rag_only(query: str,
     loader = TextLoader(str(knowledge_path), encoding="utf-8")
     documents = loader.load()
 
-    # テキスト分割
-    text_splitter = RecursiveCharacterTextSplitter(chunk_size=500,
-                                                   chunk_overlap=50,
-                                                   separators=["\n\n", "\n", "。", "、", " ", ""])
+    # テキスト分割 - セクション境界を考慮し、より大きなチャンクサイズを使用
+    text_splitter = RecursiveCharacterTextSplitter(
+        chunk_size=800,  # チャンクサイズを大きくしてコンテキストを保持
+        chunk_overlap=150,  # オーバーラップを増やして情報の断片化を防ぐ
+        separators=["## ", "\n\n", "\n", "。", "、", " ", ""]  # セクションヘッダーを優先
+    )
     splits = text_splitter.split_documents(documents)
 
     intermediate_steps.append({
@@ -57,17 +59,69 @@ async def process_rag_only(query: str,
     # 2. ベクトルストア構築
     embeddings = HuggingFaceEmbeddings(model_name="sentence-transformers/all-MiniLM-L6-v2")
     vectorstore = FAISS.from_documents(splits, embeddings)
-    # チャンク数が少ない場合は、検索結果を1つに制限
-    max_chunks = min(1, len(splits))  # 最大でも1つのチャンクのみ取得
+    # 検索結果を増やして検索精度を向上（最大5つのチャンクを取得）
+    max_chunks = min(5, len(splits))
     retriever = vectorstore.as_retriever(search_kwargs={"k": max_chunks})
 
-    # 3. 検索実行
+    # 3. 検索実行（改良版ハイブリッド検索）
+    # ベクトル検索を実行
     retrieved_docs = retriever.get_relevant_documents(query)
+
+    # クエリに「メンテナンス」「定期」などのキーワードが含まれる場合の特別処理
+    maintenance_keywords = ["メンテナンス", "定期", "保守", "点検", "交換", "清掃"]
+    is_maintenance_query = any(keyword in query for keyword in maintenance_keywords)
+
+    if is_maintenance_query:
+        # メンテナンス関連のチャンクを明示的に検索
+        maintenance_docs = []
+        for doc in splits:
+            if any(keyword in doc.page_content for keyword in maintenance_keywords):
+                maintenance_docs.append(doc)
+
+        # メンテナンス関連チャンクの中から最も関連性の高いものを追加
+        existing_content = {doc.page_content for doc in retrieved_docs}
+        for doc in maintenance_docs:
+            if doc.page_content not in existing_content:
+                retrieved_docs.append(doc)
+                if len(retrieved_docs) >= max_chunks:
+                    break
+
+    # キーワード検索も実行（特定のエラーコードを探す場合）
+    import re
+    error_codes = re.findall(r'E-\d+', query)
+    if error_codes:
+        # エラーコードが含まれるチャンクを明示的に検索
+        keyword_docs = []
+        for doc in splits:
+            for error_code in error_codes:
+                if error_code in doc.page_content:
+                    keyword_docs.append(doc)
+                    break
+
+        # キーワード検索の結果をベクトル検索結果に追加（重複を避ける）
+        existing_content = {doc.page_content for doc in retrieved_docs}
+        for doc in keyword_docs:
+            if doc.page_content not in existing_content:
+                retrieved_docs.append(doc)
+                if len(retrieved_docs) >= max_chunks:
+                    break
+
     context = "\n\n".join([doc.page_content for doc in retrieved_docs])
+
+    # デバッグ情報を追加
+    search_debug_info = f"検索されたチャンク: {len(retrieved_docs)}個"
+    if retrieved_docs:
+        search_debug_info += f", 最初のチャンク内容の一部: {retrieved_docs[0].page_content[:100]}..."
+    if error_codes:
+        search_debug_info += f", 検索されたエラーコード: {', '.join(error_codes)}"
+    if is_maintenance_query:
+        search_debug_info += f", メンテナンス関連クエリとして処理"
 
     intermediate_steps.append({
         "step": "retrieve",
         "description": f"関連する{len(retrieved_docs)}個のチャンクを検索",
+        "debug_info": search_debug_info,
+        "retrieved_content_preview": context[:200] + "..." if len(context) > 200 else context,
         "timestamp": time.time()
     })
 
@@ -75,12 +129,13 @@ async def process_rag_only(query: str,
         await asyncio.sleep(1.0)
 
     # 4. プロンプト作成とRAGチェーン構築
-    prompt_template = ChatPromptTemplate.from_template(
-        "以下のコンテキスト情報を使用して質問に答えてください。\n"
-        "コンテキストに答えが含まれていない場合は、「提供された情報では回答できません」と答えてください。\n\n"
-        "コンテキスト:\n{context}\n\n"
-        "質問: {question}\n\n"
-        "回答:")
+    prompt_template = ChatPromptTemplate.from_template("以下の製品取扱説明書を参考にして、質問に答えてください。\n\n"
+                                                       "=== 製品取扱説明書（関連情報） ===\n"
+                                                       "{context}\n\n"
+                                                       "=== 質問 ===\n"
+                                                       "{question}\n\n"
+                                                       "=== 回答 ===\n"
+                                                       "製品取扱説明書の内容に基づいて、正確な情報を提供してください。")
 
     # Vertex AI LLMを初期化
     llm = create_vertex_ai_llm()

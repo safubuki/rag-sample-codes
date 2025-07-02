@@ -34,7 +34,19 @@ async def process_llm_only(query: str, demo_mode: bool = False) -> Dict[str, Any
     # ChatVertexAIをgemini-2.5-flashモデルで初期化
     llm = create_vertex_ai_llm()
 
-    response = llm.invoke(query)
+    # 統一されたプロンプト形式を使用（他のモードと同じ）
+    formatted_prompt = f"""以下の製品取扱説明書を参考にして、質問に答えてください。
+
+=== 製品取扱説明書 ===
+（この質問では外部情報は提供されていません）
+
+=== 質問 ===
+{query}
+
+=== 回答 ===
+製品取扱説明書の内容に基づいて、正確な情報を提供してください。"""
+
+    response = llm.invoke(formatted_prompt)
 
     if demo_mode:
         await asyncio.sleep(0.5)
@@ -44,7 +56,7 @@ async def process_llm_only(query: str, demo_mode: bool = False) -> Dict[str, Any
     return {
         "response": response.content,
         "intermediate_steps": intermediate_steps,
-        "actual_prompt": query  # トークン数計算用に実際のプロンプトを返す
+        "actual_prompt": formatted_prompt  # 実際に使用されたプロンプトを返す
     }
 
 

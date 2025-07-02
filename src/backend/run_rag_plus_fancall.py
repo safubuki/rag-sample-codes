@@ -125,12 +125,12 @@ async def process_rag_plus_function_calling(user_query: str,
 
     # エージェント用のプロンプトテンプレート
     prompt = ChatPromptTemplate.from_messages([("system", "あなたは製品「Auto-Welder V3」の技術サポート担当者です。"
-                                                "利用可能なツールを使用して、ユーザーの質問に正確で有用な回答を提供してください。"
+                                                "利用可能なツールを使用して、製品取扱説明書の内容に基づいて正確で有用な回答を提供してください。"
+                                                "質問に関連する情報をツールで検索し、その内容を参考にして回答してください。"
                                                 "必要に応じて複数のツールを組み合わせて使用することができます。"),
                                                ("placeholder", "{chat_history}"),
                                                ("human", "{input}"),
                                                ("placeholder", "{agent_scratchpad}")])
-
     # ツール呼び出しエージェントを作成
     agent = create_tool_calling_agent(llm, tools, prompt)
     agent_executor = AgentExecutor(agent=agent, tools=tools, verbose=demo_mode)
@@ -155,8 +155,8 @@ async def process_rag_plus_function_calling(user_query: str,
 
     # 実際のプロンプトを構築（エージェントが使用する基本的なプロンプト）
     actual_prompt = f"""あなたは製品「Auto-Welder V3」の技術サポート担当者です。
-利用可能なツールを使用して、ユーザーの質問に正確で有用な回答を提供してください。
-必要に応じて複数のツールを組み合わせて使用することができます。
+利用可能なツールを使用して、製品取扱説明書の内容に基づいて正確で有用な回答を提供してください。
+質問に関連する情報をツールで検索し、その内容を参考にして回答してください。
 
 質問: {user_query}"""
 
