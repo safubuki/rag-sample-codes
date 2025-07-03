@@ -25,6 +25,7 @@ from run_function_calling_only import process_function_calling_only
 # 各処理モジュールをインポート
 from run_llm_only import process_llm_only
 from run_prompt_stuffing import process_prompt_stuffing
+from run_rag_advanced import process_rag_advanced
 from run_rag_only import process_rag_only
 from run_rag_plus_fancall import process_rag_plus_function_calling
 
@@ -70,6 +71,7 @@ class ProcessingMode(str, Enum):
     LLM_ONLY = "llm_only"
     PROMPT_STUFFING = "prompt_stuffing"
     RAG_ONLY = "rag_only"
+    RAG_ADVANCED = "rag_advanced"
     FUNCTION_CALLING = "function_calling"
     RAG_FUNCTION_CALLING = "rag_function_calling"
 
@@ -215,6 +217,14 @@ async def process_query(request: ProcessRequest):
             result = await process_rag_only(request.query,
                                             DATA_DIR / "knowledge.txt",
                                             demo_mode=request.demo_mode)
+
+        elif request.mode == ProcessingMode.RAG_ADVANCED:
+            result = await process_rag_advanced(
+                request.query,
+                DATA_DIR / "knowledge.txt",
+                demo_mode=request.demo_mode,
+                enable_query_expansion=False,  # クエリ拡張を無効化して高速化
+                enable_reranking=True)  # 再ランキングは有効（これが差別化要因）
 
         elif request.mode == ProcessingMode.FUNCTION_CALLING:
             result = await process_function_calling_only(request.query, demo_mode=request.demo_mode)
