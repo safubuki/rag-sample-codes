@@ -1,13 +1,14 @@
 """
 実装4：高度なRAG (run_rag_advanced.py)
 目的: Query Expansion、Re-ranking、Context Compressionを実装した高度なRAGアーキテクチャ。
+ハイブリッド検索機能を追加し、キーワード検索とベクトル検索を組み合わせて精度向上。
 """
 
 import asyncio
 import re
 import time
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Set
 
 from env_utils import create_vertex_ai_llm, setup_environment
 from langchain.prompts import ChatPromptTemplate
@@ -36,25 +37,30 @@ def get_cross_encoder():
 
 
 async def _generate_queries_optimized(question: str, llm: Any) -> List[str]:
-    """最適化されたクエリ拡張（より短いプロンプト）"""
-    expansion_prompt = ChatPromptTemplate.from_template("元の質問: {query}\n\n"
-                                                        "上記を異なる表現で書き換えた2つの検索クエリを生成してください:\n"
-                                                        "1. [クエリ1]\n"
-                                                        "2. [クエリ2]")
+    """最適化されたクエリ拡張（短いクエリのみ実行）"""
+    # 短いクエリ（20文字以下）のみクエリ拡張を実行
+    if len(question.strip()) <= 20:
+        expansion_prompt = ChatPromptTemplate.from_template("元の質問: {query}\n\n"
+                                                            "上記を異なる表現で書き換えた2つの検索クエリを生成してください:\n"
+                                                            "1. [クエリ1]\n"
+                                                            "2. [クエリ2]")
 
-    chain = expansion_prompt | llm | StrOutputParser()
-    result = await chain.ainvoke({"query": question})
+        chain = expansion_prompt | llm | StrOutputParser()
+        result = await chain.ainvoke({"query": question})
 
-    # 結果から追加クエリを抽出
-    expanded_queries = [question]  # 元のクエリを含める
-    lines = result.strip().split('\n')
-    for line in lines:
-        # 番号付きリストから抽出
-        match = re.match(r'\d+\.\s*(.+)', line.strip())
-        if match:
-            expanded_queries.append(match.group(1).strip())
+        # 結果から追加クエリを抽出
+        expanded_queries = [question]  # 元のクエリを含める
+        lines = result.strip().split('\n')
+        for line in lines:
+            # 番号付きリストから抽出
+            match = re.match(r'\d+\.\s*(.+)', line.strip())
+            if match:
+                expanded_queries.append(match.group(1).strip())
 
-    return expanded_queries[:3]  # 元のクエリ + 最大2つの追加クエリ（計3つに削減）
+        return expanded_queries[:3]  # 元のクエリ + 最大2つの追加クエリ（計3つに削減）
+    else:
+        # 長いクエリはそのまま使用（トークン効率向上）
+        return [question]
 
 
 def _rerank_documents_optimized(query: str, documents: List[Any], top_k: int = 4) -> List[Any]:
@@ -103,6 +109,45 @@ def _apply_long_context_reorder(documents: List[Any]) -> List[Any]:
         reordered.append(documents[1])  # 2番目に重要を最後に
 
     return reordered
+
+
+def _hybrid_retrieval(query: str, splits: List[Any], retriever: Any) -> List[Any]:
+    """
+    ハイブリッド検索：キーワード検索とベクトル検索を組み合わせた高精度検索
+    キーワード検索で確実性を、ベクトル検索で柔軟性を実現
+    """
+    # 1. キーワード検索：クエリが含まれるチャンクを直接検索
+    keyword_hits = []
+    query_lower = query.lower()
+
+    for doc in splits:
+        content = doc.page_content if hasattr(doc, 'page_content') else str(doc)
+        # 大文字小文字を無視してキーワードマッチング
+        if query_lower in content.lower():
+            keyword_hits.append(doc)
+
+    # 2. ベクトル検索：意味的類似性による検索
+    vector_hits = retriever.get_relevant_documents(query)
+
+    # 3. 結果の統合と重複排除
+    seen_content: Set[str] = set()
+    combined_results = []
+
+    # キーワード検索結果を優先（確実性重視）
+    for doc in keyword_hits:
+        content = doc.page_content if hasattr(doc, 'page_content') else str(doc)
+        if content not in seen_content:
+            combined_results.append(doc)
+            seen_content.add(content)
+
+    # ベクトル検索結果を追加（新しいもののみ）
+    for doc in vector_hits:
+        content = doc.page_content if hasattr(doc, 'page_content') else str(doc)
+        if content not in seen_content:
+            combined_results.append(doc)
+            seen_content.add(content)
+
+    return combined_results
 
 
 async def process_rag_advanced(query: str,
@@ -167,21 +212,24 @@ async def process_rag_advanced(query: str,
     if demo_mode:
         await asyncio.sleep(0.3)
 
-    # 4. 複数クエリでドキュメント検索（検索数を削減）
+    # 4. ハイブリッド検索（キーワード + ベクトル検索）
     all_retrieved_docs = []
     seen_content = set()
 
     for exp_query in expanded_queries:
-        docs = retriever.get_relevant_documents(exp_query)
-        for doc in docs:
+        # ハイブリッド検索を実行（新機能）
+        hybrid_docs = _hybrid_retrieval(exp_query, splits, retriever)
+
+        for doc in hybrid_docs:
             # 重複を除去
             if doc.page_content not in seen_content:
                 all_retrieved_docs.append(doc)
                 seen_content.add(doc.page_content)
 
     intermediate_steps.append({
-        "step": "multi_query_retrieval",
-        "description": f"検索で{len(all_retrieved_docs)}個の候補ドキュメントを取得",
+        "step": "hybrid_retrieval",
+        "description": f"ハイブリッド検索（キーワード+ベクトル）で{len(all_retrieved_docs)}個の候補を取得",
+        "queries_used": expanded_queries,
         "timestamp": time.time()
     })
 
@@ -288,7 +336,7 @@ def main():
 
     # 質問を定義
     question = "エラーコードE-404の対処法は？"
-    knowledge_path = Path("knowledge.txt")
+    knowledge_path = Path("../../data/knowledge.txt")
 
     print("=== 実装4: 高度なRAG ===")
     print(f"質問: {question}")

@@ -4,12 +4,14 @@
 """
 
 import asyncio
+import re
 import time
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any, Dict, List
 
 from env_utils import create_vertex_ai_llm, setup_environment
 from langchain.prompts import ChatPromptTemplate
+from langchain.schema import Document
 from langchain.schema.output_parser import StrOutputParser
 from langchain.schema.runnable import RunnablePassthrough
 from langchain.text_splitter import RecursiveCharacterTextSplitter
@@ -19,6 +21,61 @@ from langchain_community.vectorstores import FAISS
 
 # 環境変数を読み込み
 setup_environment()
+
+
+def _hybrid_retrieval(query: str, splits: List[Document], retriever) -> List[Document]:
+    """ハイブリッド検索：ベクトル検索とキーワード検索を組み合わせる"""
+
+    # 1. ベクトル検索
+    vector_docs = retriever.get_relevant_documents(query)
+
+    # 2. キーワード検索の実行
+    keyword_docs = []
+
+    # エラーコード検索（E-XXX形式）
+    error_codes = re.findall(r'E-\d+', query)
+    if error_codes:
+        for doc in splits:
+            for error_code in error_codes:
+                if error_code in doc.page_content:
+                    keyword_docs.append(doc)
+                    break
+
+    # メンテナンス関連キーワード検索
+    maintenance_keywords = ["メンテナンス", "定期", "保守", "点検", "交換", "清掃"]
+    is_maintenance_query = any(keyword in query for keyword in maintenance_keywords)
+    if is_maintenance_query:
+        for doc in splits:
+            if any(keyword in doc.page_content for keyword in maintenance_keywords):
+                keyword_docs.append(doc)
+
+    # 一般的なキーワード検索（クエリの重要な単語）
+    query_words = [word for word in query.split() if len(word) > 2]
+    for doc in splits:
+        for word in query_words:
+            if word in doc.page_content:
+                keyword_docs.append(doc)
+                break
+
+    # 3. 結果の統合と重複除去
+    combined_docs = []
+    seen_content = set()
+
+    # ベクトル検索結果を優先（関連性が高い）
+    for doc in vector_docs:
+        if doc.page_content not in seen_content:
+            combined_docs.append(doc)
+            seen_content.add(doc.page_content)
+
+    # キーワード検索結果を追加（重複を除く）
+    for doc in keyword_docs:
+        if doc.page_content not in seen_content:
+            combined_docs.append(doc)
+            seen_content.add(doc.page_content)
+
+    # 最大チャンク数に制限
+    max_chunks = 5
+    return combined_docs[:max_chunks]
 
 
 async def process_rag_only(query: str,
@@ -63,63 +120,19 @@ async def process_rag_only(query: str,
     max_chunks = min(5, len(splits))
     retriever = vectorstore.as_retriever(search_kwargs={"k": max_chunks})
 
-    # 3. 検索実行（改良版ハイブリッド検索）
-    # ベクトル検索を実行
-    retrieved_docs = retriever.get_relevant_documents(query)
-
-    # クエリに「メンテナンス」「定期」などのキーワードが含まれる場合の特別処理
-    maintenance_keywords = ["メンテナンス", "定期", "保守", "点検", "交換", "清掃"]
-    is_maintenance_query = any(keyword in query for keyword in maintenance_keywords)
-
-    if is_maintenance_query:
-        # メンテナンス関連のチャンクを明示的に検索
-        maintenance_docs = []
-        for doc in splits:
-            if any(keyword in doc.page_content for keyword in maintenance_keywords):
-                maintenance_docs.append(doc)
-
-        # メンテナンス関連チャンクの中から最も関連性の高いものを追加
-        existing_content = {doc.page_content for doc in retrieved_docs}
-        for doc in maintenance_docs:
-            if doc.page_content not in existing_content:
-                retrieved_docs.append(doc)
-                if len(retrieved_docs) >= max_chunks:
-                    break
-
-    # キーワード検索も実行（特定のエラーコードを探す場合）
-    import re
-    error_codes = re.findall(r'E-\d+', query)
-    if error_codes:
-        # エラーコードが含まれるチャンクを明示的に検索
-        keyword_docs = []
-        for doc in splits:
-            for error_code in error_codes:
-                if error_code in doc.page_content:
-                    keyword_docs.append(doc)
-                    break
-
-        # キーワード検索の結果をベクトル検索結果に追加（重複を避ける）
-        existing_content = {doc.page_content for doc in retrieved_docs}
-        for doc in keyword_docs:
-            if doc.page_content not in existing_content:
-                retrieved_docs.append(doc)
-                if len(retrieved_docs) >= max_chunks:
-                    break
+    # 3. ハイブリッド検索実行
+    retrieved_docs = _hybrid_retrieval(query, splits, retriever)
 
     context = "\n\n".join([doc.page_content for doc in retrieved_docs])
 
     # デバッグ情報を追加
-    search_debug_info = f"検索されたチャンク: {len(retrieved_docs)}個"
+    search_debug_info = f"ハイブリッド検索で取得されたチャンク: {len(retrieved_docs)}個"
     if retrieved_docs:
         search_debug_info += f", 最初のチャンク内容の一部: {retrieved_docs[0].page_content[:100]}..."
-    if error_codes:
-        search_debug_info += f", 検索されたエラーコード: {', '.join(error_codes)}"
-    if is_maintenance_query:
-        search_debug_info += f", メンテナンス関連クエリとして処理"
 
     intermediate_steps.append({
-        "step": "retrieve",
-        "description": f"関連する{len(retrieved_docs)}個のチャンクを検索",
+        "step": "hybrid_retrieval",
+        "description": f"ハイブリッド検索で{len(retrieved_docs)}個のチャンクを取得",
         "debug_info": search_debug_info,
         "retrieved_content_preview": context[:200] + "..." if len(context) > 200 else context,
         "timestamp": time.time()
@@ -176,7 +189,7 @@ def main():
 
     # 質問を定義
     question = "エラーコードE-404の対処法は？"
-    knowledge_path = Path("knowledge.txt")
+    knowledge_path = Path("../../data/knowledge.txt")
 
     print("=== 実装3: RAGのみ ===")
     print(f"質問: {question}")
