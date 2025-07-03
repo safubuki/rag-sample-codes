@@ -223,7 +223,7 @@ async def process_query(request: ProcessRequest):
                 request.query,
                 DATA_DIR / "knowledge.txt",
                 demo_mode=request.demo_mode,
-                enable_query_expansion=False,  # クエリ拡張を無効化して高速化
+                enable_query_expansion=True,  # クエリ拡張を有効化（差別化要因）
                 enable_reranking=True)  # 再ランキングは有効（これが差別化要因）
 
         elif request.mode == ProcessingMode.FUNCTION_CALLING:
