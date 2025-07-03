@@ -31,43 +31,97 @@
 - Node.js 18以上
 - Google Cloud Project（Vertex AI API有効化）
 
-### 最短設定手順
+## 🚀 クイックスタート
 
-1. **Google Cloud設定**: [Google Cloud Console](https://console.cloud.google.com/)でプロジェクト作成・Vertex AI API有効化
-2. **認証設定**: プロジェクトルートに`.env`ファイル作成し、`GOOGLE_CLOUD_PROJECT=your-project-id`を記載
-3. **代替認証**: または`gcloud auth application-default login`でログイン
+### 前提条件
 
-### インストール・実行
+- Python 3.10以上
+- Node.js 18以上
+- Google Cloud Project（Vertex AI API有効化）
+
+### 📋 最短設定手順
+
+> **⚠️ 重要**: Google Cloud APIの設定が必要です。詳細な手順は **[📋 事前準備: Google Cloud AI API設定](#📋-事前準備-google-cloud-ai-api設定)** をご覧ください。
+
+#### 1. Google Cloud設定（必須）
+- [Google Cloud Console](https://console.cloud.google.com/)でプロジェクト作成
+- Vertex AI APIを有効化
+- サービスアカウントキーをダウンロード
+
+#### 2. 認証設定（必須）
+プロジェクトルートに`.env`ファイルを作成し、以下を記載：
 
 ```bash
-# 1. プロジェクトIDを設定（必須）
-echo "GOOGLE_CLOUD_PROJECT=your-actual-project-id" > .env
+GOOGLE_CLOUD_PROJECT=your-actual-project-id
+GOOGLE_APPLICATION_CREDENTIALS=./service-account-key.json
+```
 
-# 2. バックエンド環境構築
+> **💡 設定のポイント**  
+> - `GOOGLE_CLOUD_PROJECT`: 作成したプロジェクトのID
+> - `GOOGLE_APPLICATION_CREDENTIALS`: ダウンロードしたJSONキーファイルのパス
+> - 詳細な設定方法は **[事前準備セクション](#📋-事前準備-google-cloud-ai-api設定)** で説明しています
+
+### 🔧 インストール・実行
+
+#### 初回セットアップ（初めて実行する場合）
+
+```bash
+# 1. プロジェクトをクローン（GitHubから取得した場合）
+git clone <repository-url>
+cd rag-sample-codes
+
+# 2. 認証設定（必須）
+# プロジェクトルートに.envファイルを作成し、上記の内容を記載
+
+# 3. バックエンド環境構築
 python -m venv .venv
 .venv\Scripts\activate  # Windows
+# source .venv/bin/activate  # Linux/Mac
 pip install -r src/backend/requirements.txt
 
-# 2. フロントエンド環境構築
+# 4. フロントエンド環境構築
 cd src/frontend
 npm install
+cd ..
 
-# 3. 実行（2つのターミナルで同時実行）
-# ターミナル1: バックエンド
+# 5. 初回実行テスト
+# ターミナル1: バックエンド起動
 python src/backend/main.py
 
-# ターミナル2: フロントエンド
+# ターミナル2: フロントエンド起動（新しいターミナルで）
 cd src/frontend
 npm run dev
 ```
 
-### アクセス
+#### 通常実行（2回目以降）
+
+一度環境構築が完了していれば、以下の簡単な手順で起動できます：
+
+```bash
+# 1. Python仮想環境を有効化
+.venv\Scripts\activate  # Windows
+# source .venv/bin/activate  # Linux/Mac
+
+# 2. バックエンド起動（ターミナル1）
+python src/backend/main.py
+
+# 3. フロントエンド起動（ターミナル2）
+cd src/frontend
+npm run dev
+```
+
+> **🚀 一括起動スクリプト**  
+> 毎回の起動を簡単にするため、詳細な **[インストール・実行手順](#🚀-インストール・実行手順)** では一括起動スクリプトも紹介しています。
+
+### 🌐 アクセス
+
+システムが正常に起動したら、以下のURLでアクセスできます：
 
 - **フロントエンド**: <http://localhost:3000>
 - **バックエンドAPI**: <http://localhost:8000>
 - **API仕様書**: <http://localhost:8000/docs>
 
-### 基本的な使用方法
+### 📖 基本的な使用方法
 
 1. ブラウザで <http://localhost:3000> にアクセス
 2. 処理モードを選択（5つの手法から）
@@ -77,7 +131,13 @@ npm run dev
 6. 必要に応じてナレッジベースを編集
 7. 実行ログをダウンロード
 
+> **🔗 詳細な設定情報**  
+> より詳しいセットアップ手順や設定方法については、**[📋 事前準備: Google Cloud AI API設定](#📋-事前準備-google-cloud-ai-api設定)** セクションをご参照ください。
+
 ### トラブルシューティング
+
+<details>
+<summary>💡 <strong>よくある問題と解決方法</strong>（クリックして展開）</summary>
 
 #### 起動時によくあるエラー
 
@@ -99,6 +159,8 @@ npm run dev -- --port 3001
 - `.env`ファイルの設定を確認
 - サービスアカウントキーファイルのパスを確認
 - 詳細は「Google Cloud & LLM 接続トラブルシューティング」セクションを参照
+
+</details>
 
 ### システム停止方法
 
@@ -730,55 +792,93 @@ LLMが事実に基づかない内容を生成すること。RAGにより軽減�
 
 ## 📋 事前準備: Google Cloud AI API設定
 
-このシステムを動作させるには、Google Cloud ProjectでVertex AI APIを設定する必要があります。
+このシステムを動作させるには、Google Cloud ProjectでVertex AI APIを設定する必要があります。以下のWebUI中心の手順で、初心者でも安心して設定できます。
 
-### ステップ1: Google Cloud Projectの作成
+> **💡 設定の全体像**  
+> この設定は「AIアプリケーションの家を建てて、電気・水道を通し、プログラムが入居できるように身分証明書を作る」というイメージです。
 
-1. [Google Cloud Console](https://console.cloud.google.com/)にアクセス
-2. 「プロジェクトを選択」→「新しいプロジェクト」をクリック
-3. プロジェクト名を入力（例: `my-rag-project`）
+### ステップ1: プロジェクトの作成と有効化
+
+> **🏠 目的**: これから作るAIアプリケーションの「家」と「住所」を決め、電気や水道（API）を使えるようにする作業です。
+
+#### 1-1. Google Cloudにログイン
+[Google Cloud Console](https://console.cloud.google.com/)に、お持ちのGoogleアカウントでログインします。
+
+#### 1-2. プロジェクトを作成する
+1. 画面左上のプロジェクト名が表示されている部分（例: `My First Project`）をクリック
+2. 「新しいプロジェクト」を選択
+3. プロジェクト名に分かりやすい名前（例: `My RAG Project`）を入力
 4. 「作成」をクリック
 5. **重要**: 作成されたプロジェクトIDをメモしてください
 
-### ステップ2: Vertex AI APIの有効化
+> **❓ なぜプロジェクトが必要？**  
+> プロジェクトは、リソースや課金を管理するための独立した「箱」です。この箱を作ることで、他のプロジェクトと完全に分離して開発を進められます。
 
-1. [APIライブラリ](https://console.cloud.google.com/apis/library)に移動
-2. 「Vertex AI API」を検索
-3. 「Vertex AI API」をクリック→「有効にする」をクリック
-4. または、Cloud Shellで以下を実行:
-   ```bash
-   gcloud services enable aiplatform.googleapis.com
-   ```
+#### 1-3. 請求を有効化する
+1. 左のナビゲーションメニュー（☰）から「お支払い」を選択
+2. 画面の指示に従ってクレジットカード情報などを登録
+3. 「請求先アカウント」を作成・リンク
 
-### ステップ3: 認証設定（推奨方法: サービスアカウント）
+> **💰 請求について**  
+> API利用は従量課金制のため、支払い情報の登録が必須です。ただし、多くの場合、個人の学習範囲であれば無料利用枠内に収まります。
 
-1. [IAM & 管理 > サービスアカウント](https://console.cloud.google.com/iam-admin/serviceaccounts)に移動
-2. 「サービスアカウントを作成」をクリック
-3. サービスアカウント名を入力（例: `rag-service-account`）
-4. 「作成して続行」をクリック
-5. ロールで「Vertex AI ユーザー」を選択
-6. 「完了」をクリック
-7. 作成されたサービスアカウントをクリック
-8. 「キー」タブ→「キーを追加」→「新しいキーを作成」
-9. 「JSON」を選択→「作成」
-10. **重要**: ダウンロードされたJSONファイルを安全な場所に保存
+#### 1-4. Vertex AI APIを有効にする
+1. ナビゲーションメニュー（☰）から「APIとサービス」→「ライブラリ」を選択
+2. 検索バーに「Vertex AI API」と入力
+3. 表示されたAPIをクリックして「有効にする」ボタンをクリック
 
-### ステップ4: 認証設定（代替方法: gcloud CLI）
+> **🔐 なぜ有効化が必要？**  
+> セキュリティのため、Google CloudのAPIはデフォルトでオフになっています。「このプロジェクトでGeminiを使います」という意思表示として、明示的にオンにする必要があります。
 
-```bash
-# Google Cloud CLIをインストール後
-gcloud auth application-default login
-gcloud config set project YOUR_PROJECT_ID
-```
+### ステップ2: 認証キー（サービスアカウントキー）の作成
 
-### ステップ5: 環境変数の設定
+> **🔑 目的**: あなたのプログラムが、許可された利用者であることを証明するための「身分証明書」と「鍵」を作成します。
 
-プロジェクトルートに`.env`ファイルを作成:
+#### 2-1. サービスアカウントを作成する
+1. ナビゲーションメニュー（☰）から「IAMと管理」→「サービスアカウント」を選択
+2. 「+ サービスアカウントを作成」をクリック
+3. 分かりやすい名前（例: `gemini-rag-runner`）を付けて「作成して続行」
+
+> **🤖 サービスアカウントとは？**  
+> サービスアカウントは、人間ではなく、プログラム専用の特別なGoogleアカウントです。このアカウントに権限を与えることで、安全にAPIを利用します。
+
+#### 2-2. 役割（権限）を付与する
+1. 「ロールを選択」で「Vertex AI ユーザー」を検索して選択
+2. 「続行」→「完了」と進む
+
+> **🛡️ 最小権限の原則**  
+> 作成したプログラム用アカウントに、「あなたはVertex AIを使っても良いですよ」という権限を与えることで、必要最小限の権限で安全に運用できます。
+
+#### 2-3. JSONキーをダウンロードする
+1. 作成したサービスアカウントの一覧から、今作ったアカウントのメールアドレスをクリック
+2. 「キー」タブに移動
+3. 「鍵を追加」→「新しい鍵を作成」を選択
+4. キーのタイプは「JSON」のまま「作成」をクリック
+5. 自動的にJSONファイルがPCにダウンロードされます
+
+> **🔐 秘密鍵の重要性**  
+> このJSONファイルが、プログラムがGoogleに自分を証明するための「秘密の鍵」です。これを持っているプログラムだけが、APIを呼び出すことができます。
+
+### ステップ3: PC環境の設定
+
+> **⚙️ 目的**: あなたのPC上で動くプログラムに、「鍵」のありかを教えます。
+
+#### 3-1. キーファイルを安全な場所に配置
+
+1. ダウンロードしたJSONキーファイルを、このプロジェクトのルートフォルダに移動
+2. ファイル名を分かりやすい名前（例: `service-account-key.json`）に変更（任意）
+
+> **📁 推奨配置場所**  
+> プロジェクトルートに配置することで、相対パスで指定でき、チーム開発時の設定が統一しやすくなります。
+
+#### 3-2. 環境変数を設定する
+
+プロジェクトルートに`.env`ファイルを作成し、以下の内容を記載：
 
 ```bash
 # 必須設定
 GOOGLE_CLOUD_PROJECT=your-actual-project-id
-GOOGLE_APPLICATION_CREDENTIALS=C:/path/to/your/service-account-key.json
+GOOGLE_APPLICATION_CREDENTIALS=./service-account-key.json
 GOOGLE_CLOUD_REGION=us-central1
 
 # オプション設定
@@ -787,11 +887,59 @@ CHUNK_OVERLAP=150
 MAX_RETRIEVED_DOCS=5
 ```
 
-**Windows PowerShellの場合の環境変数設定例:**
+> **🔧 環境変数設定の代替方法**  
+> `.env`ファイルの代わりに、ターミナルで直接設定することも可能です：
+
+**Windows PowerShell:**
 ```powershell
-$env:GOOGLE_CLOUD_PROJECT="your-project-id"
-$env:GOOGLE_APPLICATION_CREDENTIALS="C:\path\to\service-account-key.json"
+$env:GOOGLE_CLOUD_PROJECT = "your-project-id"
+$env:GOOGLE_APPLICATION_CREDENTIALS = ".\service-account-key.json"
 ```
+
+**macOS/Linux:**
+```bash
+export GOOGLE_CLOUD_PROJECT="your-project-id"
+export GOOGLE_APPLICATION_CREDENTIALS="./service-account-key.json"
+```
+
+> **💡 なぜ環境変数が必要？**  
+> LangChainなどのライブラリは、`GOOGLE_APPLICATION_CREDENTIALS`という決まった名前の環境変数を自動で探しに行きます。ここにパスを設定しておけば、コード内に秘密の鍵情報を書かずに済み、安全です。
+
+#### 3-3. 設定確認
+
+以下のPythonスクリプトで設定が正しいかテストできます：
+
+```python
+import os
+from google.cloud import aiplatform
+
+# 環境変数の確認
+project_id = os.getenv('GOOGLE_CLOUD_PROJECT')
+credentials_path = os.getenv('GOOGLE_APPLICATION_CREDENTIALS')
+
+print(f"プロジェクトID: {project_id}")
+print(f"認証ファイル: {credentials_path}")
+
+# Vertex AI接続テスト
+try:
+    aiplatform.init(project=project_id, location="us-central1")
+    print("✅ Vertex AI接続成功！")
+except Exception as e:
+    print(f"❌ 接続エラー: {e}")
+```
+
+### 🎯 設定完了後の次のステップ
+
+Google Cloud AI APIの設定が完了したら、以下の手順でシステムを起動できます：
+
+1. **� クイックスタート** セクションに戻って実行する
+2. または **� インストール・実行手順** セクションで詳細な手順を確認する
+3. 問題が発生した場合は **🔧 トラブルシューティング** を参照
+
+> **🎉 お疲れ様でした！**  
+> これで、LLMを活用したRAGシステムを体験する準備が整いました。**[🚀 クイックスタート](#🚀-クイックスタート)** に戻って、実際にシステムを起動して、5つの異なる情報提供手法を比較してみましょう。
+
+---
 
 ## 🚀 インストール・実行手順
 
@@ -931,6 +1079,9 @@ echo "フロントエンド: http://localhost:3000"
 ```
 
 ## Google Cloud & LLM 接続トラブルシューティング
+
+<details>
+<summary>🔧 <strong>Google Cloud関連のエラーと解決方法</strong>（クリックして展開）</summary>
 
 ### よくある接続エラーと対処法
 
@@ -1198,6 +1349,8 @@ def test_connection_step_by_step():
 if __name__ == "__main__":
     test_connection_step_by_step()
 ```
+
+</details>
 
 ## 🔗 関連ドキュメント
 
