@@ -37,9 +37,11 @@
 > **🏠 目的**: これから作るAIアプリケーションの「家」と「住所」を決め、電気や水道（API）を使えるようにする作業です。
 
 #### 1-1. Google Cloudにログイン
+
 [Google Cloud Console](https://console.cloud.google.com/)に、お持ちのGoogleアカウントでログインします。
 
 #### 1-2. プロジェクトを作成する
+
 1. 画面左上のプロジェクト名が表示されている部分（例: `My First Project`）をクリック
 2. 「新しいプロジェクト」を選択
 3. プロジェクト名に分かりやすい名前（例: `My RAG Project`）を入力
@@ -50,6 +52,7 @@
 > プロジェクトは、リソースや課金を管理するための独立した「箱」です。この箱を作ることで、他のプロジェクトと完全に分離して開発を進められます。
 
 #### 1-3. 請求を有効化する
+
 1. 左のナビゲーションメニュー（☰）から「お支払い」を選択
 2. 画面の指示に従ってクレジットカード情報などを登録
 3. 「請求先アカウント」を作成・リンク
@@ -58,6 +61,7 @@
 > API利用は従量課金制のため、支払い情報の登録が必須です。ただし、多くの場合、個人の学習範囲であれば無料利用枠内に収まります。
 
 #### 1-4. Vertex AI APIを有効にする
+
 1. ナビゲーションメニュー（☰）から「APIとサービス」→「ライブラリ」を選択
 2. 検索バーに「Vertex AI API」と入力
 3. 表示されたAPIをクリックして「有効にする」ボタンをクリック
@@ -70,6 +74,7 @@
 > **🔑 目的**: あなたのプログラムが、許可された利用者であることを証明するための「身分証明書」と「鍵」を作成します。
 
 #### 2-1. サービスアカウントを作成する
+
 1. ナビゲーションメニュー（☰）から「IAMと管理」→「サービスアカウント」を選択
 2. 「+ サービスアカウントを作成」をクリック
 3. 分かりやすい名前（例: `gemini-rag-runner`）を付けて「作成して続行」
@@ -78,6 +83,7 @@
 > サービスアカウントは、人間ではなく、プログラム専用の特別なGoogleアカウントです。このアカウントに権限を与えることで、安全にAPIを利用します。
 
 #### 2-2. 役割（権限）を付与する
+
 1. 「ロールを選択」で「Vertex AI ユーザー」を検索して選択
 2. 「続行」→「完了」と進む
 
@@ -85,6 +91,7 @@
 > 作成したプログラム用アカウントに、「あなたはVertex AIを使っても良いですよ」という権限を与えることで、必要最小限の権限で安全に運用できます。
 
 #### 2-3. JSONキーをダウンロードする
+
 1. 作成したサービスアカウントの一覧から、今作ったアカウントのメールアドレスをクリック
 2. 「キー」タブに移動
 3. 「鍵を追加」→「新しい鍵を作成」を選択
@@ -126,6 +133,7 @@ MAX_RETRIEVED_DOCS=5
 > `.env`ファイルの代わりに、ターミナルで直接設定することも可能です：
 
 **Windows PowerShell:**
+
 ```powershell
 $env:GOOGLE_CLOUD_PROJECT = "your-project-id"
 $env:GOOGLE_APPLICATION_CREDENTIALS = ".\service-account-key.json"
@@ -156,19 +164,18 @@ try:
 except Exception as e:
     print(f"❌ 接続エラー: {e}")
 ```
+
 ---
 
 ## 🚀 インストール・実行手順
 
-### 初回セットアップ（初めて実行する場合）
-
-#### 1. 前提条件の確認
+### 前提条件
 
 - Python 3.10以上
 - Node.js 18以上
 - Git
 
-#### 2. 初回セットアップ（初めて実行する場合）
+### 初回セットアップ（初めて実行する場合）
 
 ```bash
 # 1. プロジェクトをクローン（GitHubから取得した場合）
@@ -197,42 +204,11 @@ cd src/frontend
 npm run dev
 ```
 
-#### 2. 通常実行（2回目以降）
+### 動作確認
 
-一度環境構築が完了していれば、以下の簡単な手順で起動できます：
-
-```bash
-# 1. Python仮想環境を有効化
-.venv\Scripts\activate  # Windows
-
-# 2. バックエンド起動（ターミナル1）
-python src/backend/main.py
-
-# 3. フロントエンド起動（ターミナル2）
-cd src/frontend
-npm run dev
-```
-
-#### 3. 環境変数設定
-
-前述の「事前準備」で設定した`.env`ファイルがプロジェクトルートにあることを確認。
-
-#### 4. 初回実行テスト
-
-```bash
-# ターミナル1: バックエンド起動
-python src/backend/main.py
-
-# ターミナル2: フロントエンド起動（新しいターミナルで）
-cd src/frontend
-npm run dev
-```
-
-#### 5. 動作確認
-
-- **フロントエンド**: http://localhost:3000
-- **バックエンドAPI**: http://localhost:8000
-- **API仕様書**: http://localhost:8000/docs
+- **フロントエンド**: <http://localhost:3000>
+- **バックエンドAPI**: <http://localhost:8000>
+- **API仕様書**: <http://localhost:8000/docs>
 
 ### 通常実行（2回目以降）
 
@@ -255,6 +231,7 @@ npm run dev
 #### 方法2: 一括起動スクリプト（推奨）
 
 **Windows用 `start.bat`:**
+
 ```batch
 @echo off
 echo RAG Sample System Starting...
@@ -289,6 +266,7 @@ pause
 #### 起動時によくあるエラー
 
 **エラー: `ModuleNotFoundError`**
+
 ```bash
 # 仮想環境が有効化されていない可能性
 .venv\Scripts\activate  # Windows
@@ -296,13 +274,15 @@ pip install -r src/backend/requirements.txt
 ```
 
 **エラー: `Port 3000 is already in use`**
+
 ```bash
 # 別のポートで起動
 cd src/frontend
 npm run dev -- --port 3001
 ```
 
-**エラー: Google Cloud認証エラー**
+### エラー: Google Cloud認証エラー
+
 - `.env`ファイルの設定を確認
 - サービスアカウントキーファイルのパスを確認
 - 詳細は「Google Cloud & LLM 接続トラブルシューティング」セクションを参照
@@ -323,17 +303,20 @@ npm run dev -- --port 3001
 
 **目的**: 外部情報なしでLLMの内蔵知識のみを活用したベースライン性能の測定
 
-**特徴**: 
+**特徴**:
+
 - 最もシンプルな実装
 - 外部データソース不要
 - 高速な応答時間
 
-**利点**: 
+**利点**:
+
 - 実装・運用コストが最小
 - レスポンス時間が最短
 - 外部システム依存なし
 
-**制約**: 
+**制約**:
+
 - 知識の範囲が学習データに限定
 - 最新情報への対応不可
 - 専門的・固有情報の不足
@@ -342,17 +325,20 @@ npm run dev -- --port 3001
 
 **目的**: 全情報をプロンプトに埋め込むことで確実な情報提供を実現
 
-**特徴**: 
+**特徴**:
+
 - 全ナレッジベースをプロンプトに含める
 - 情報の取りこぼしが最小
 - 理解しやすい単純な仕組み
 
-**利点**: 
+**利点**:
+
 - 全情報への確実なアクセス
 - 実装が単純で分かりやすい
 - 情報の優先順位付け不要
 
-**制約**: 
+**制約**:
+
 - トークン消費量が大量
 - コンテキスト長制限による制約
 - 大規模データへの適用困難
@@ -361,17 +347,20 @@ npm run dev -- --port 3001
 
 **目的**: ベクトル検索による効率的な関連情報取得でスケーラブルなシステムを構築
 
-**特徴**: 
+**特徴**:
+
 - 意味的類似性による文書検索
 - 効率的なトークン使用
 - 大規模データセットへの対応
 
-**利点**: 
+**利点**:
+
 - 高いスケーラビリティ
 - 効率的なリソース使用
 - 拡張性に優れた設計
 
-**制約**: 
+**制約**:
+
 - 検索精度がエンベディング品質に依存
 - 関連性判定の精度限界
 - 重要な情報の見落としリスク
@@ -380,17 +369,20 @@ npm run dev -- --port 3001
 
 **目的**: CrossEncoder再ランキングによる高精度・低トークンの次世代RAGシステム
 
-**特徴**: 
+**特徴**:
+
 - CrossEncoderによる高精度関連性評価
 - 効率的クエリ拡張
 - Lost in the Middle対策
 
-**利点**: 
+**利点**:
+
 - ベーシックRAGより30-50%の精度向上
 - トークン使用量を20-30%削減
 - 動的パラメータ制御による最適化
 
-**制約**: 
+**制約**:
+
 - CrossEncoder処理による若干の処理時間増加
 - モデル初期化コスト
 - 実装の複雑性増加
@@ -399,17 +391,20 @@ npm run dev -- --port 3001
 
 **目的**: LLMの自律的ツール選択・実行による動的で柔軟な情報検索
 
-**特徴**: 
+**特徴**:
+
 - LLMによる状況判断
 - 動的なツール選択
 - 柔軟な検索戦略
 
-**利点**: 
+**利点**:
+
 - 状況に応じた最適な検索方法
 - 予期しない情報ニーズへの対応
 - 検索方法の自動最適化
 
-**制約**: 
+**制約**:
+
 - LLMの判断精度に依存
 - ツール設計の品質が重要
 - 処理時間の予測困難
@@ -418,26 +413,23 @@ npm run dev -- --port 3001
 
 **目的**: RAGとFunction Callingの組み合わせによる最も柔軟で高性能なシステム
 
-**特徴**: 
+**特徴**:
+
 - Agent Executorによるオーケストレーション
 - 複数検索手法の統合活用
 - 状況に応じた動的切り替え
 
-**利点**: 
+**利点**:
+
 - 最高レベルの柔軟性と精度
 - 複数手法の相互補完
 - 多様な情報ニーズへの対応
 
-**制約**: 
+**制約**:
+
 - 最も複雑な実装
 - 処理時間とコストの増加
 - デバッグとメンテナンスの困難さ
-
-**LLMの自律的ツール選択・実行**。動的で柔軟な情報検索が可能ですが、ツール設計の品質に依存します。
-
-### 手法6: RAG + Function Calling（推奨）
-
-**RAGとFunction Callingの組み合わせ**。最も柔軟で実用的ですが、複雑性が増加します。
 
 ## 🏗️ システムアーキテクチャ
 
@@ -524,7 +516,7 @@ graph LR
 
 **特徴**: 最もシンプルな構成。外部情報源は一切使用せず、LLMの内蔵知識のみで回答を生成します。処理速度は最も高速ですが、知識の範囲が限定的です。
 
-#### 手法2: プロンプトスタッフィング
+#### システム構成図 - 手法2: プロンプトスタッフィング
 
 ```mermaid
 graph LR
@@ -570,7 +562,7 @@ graph LR
 
 **特徴**: 質問をEmbeddingsでベクトル化し、Vector Storeから関連性の高い文書を検索して回答に活用します。効率的で拡張性が高く、現代的なRAGの基本形です。
 
-#### 手法4: RAG高度版（CrossEncoder再ランキング）
+#### システム構成図 - 手法4: RAG高度版（CrossEncoder再ランキング）
 
 ```mermaid
 graph LR
@@ -596,7 +588,7 @@ graph LR
 
 **特徴**: ベーシックRAGにCrossEncoder再ランキングを追加した高精度システム。関連性の高い文書をより正確に特定し、効率的なトークン使用を実現します。
 
-#### 手法5: Function Callingのみ
+#### システム構成図 - 手法5: Function Callingのみ
 
 ```mermaid
 graph LR
@@ -621,7 +613,7 @@ graph LR
 
 **特徴**: LLMが自律的にFunction Toolsを選択・実行してKnowledge Baseから必要な情報を取得します。LLMの判断力を活用した動的な情報検索が可能です。
 
-#### 手法6: RAG + Function Calling（推奨）
+#### システム構成図 - 手法6: RAG + Function Calling（推奨）
 
 ```mermaid
 graph LR
@@ -676,16 +668,19 @@ graph LR
 ### 📝 評価指標の説明
 
 #### 🤖 自律判断
+
 **定義**: LLMが状況に応じて適切なツールや検索手法を自動選択する能力
 
 - **❌ なし**: 事前に決められた処理のみ実行
 - **✅ あり**: LLMが動的にツール選択・実行戦略を決定
 
-**読み手の判断基準**: 
+**読み手の判断基準**:
+
 - **自律判断が重要な場合**: 多様な質問に対応、予期しない情報ニーズへの対応
 - **自律判断が不要な場合**: 決まったパターンの質問、予測可能な処理フロー
 
 #### ⚡ 効率性（処理速度・リソース消費）
+
 **定義**: レスポンス時間とトークン消費量のバランス
 
 - **⭐⭐⭐ 高**: 高速レスポンス、少ないトークン消費
@@ -693,10 +688,12 @@ graph LR
 - **⭐ 低**: 処理時間が長い、大量のトークン消費
 
 **読み手の判断基準**:
+
 - **高効率が重要**: リアルタイム応答、大量処理、コスト重視
 - **効率性より精度**: 複雑な分析、高品質な回答が必要
 
 #### 🎯 精度（回答の正確性・関連性）
+
 **定義**: 質問に対する回答の正確性と情報の関連性
 
 - **⭐⭐⭐ 高**: 外部情報を活用した正確で詳細な回答
@@ -704,10 +701,12 @@ graph LR
 - **⭐ 低**: 限定的な知識による曖昧または不正確な回答
 
 **読み手の判断基準**:
+
 - **高精度が必要**: 専門的な質問、事実確認、正確性が重要な業務
 - **精度より速度**: 概要把握、ブレインストーミング、一般的な質問
 
 #### 🔧 柔軟性（適応性・拡張性）
+
 **定義**: 多様な質問や新しい要求に対する対応能力
 
 - **⭐⭐⭐ 高**: 複数の検索手法、動的な戦略変更、多様な情報源に対応
@@ -715,6 +714,7 @@ graph LR
 - **⭐ 低**: 固定的な処理、単一の情報源に依存
 
 **読み手の判断基準**:
+
 - **高柔軟性が重要**: 多様な業務、予期しない質問、将来の拡張性
 - **柔軟性が不要な場合**: 単一目的、定型的な質問、シンプルな運用
 
@@ -871,11 +871,13 @@ rag-sample-codes/
 #### 認証関連のエラー
 
 **エラー: `google.auth.exceptions.DefaultCredentialsError`**
-```
+
+```text
 google.auth.exceptions.DefaultCredentialsError: Could not automatically determine credentials.
 ```
 
 **原因と対処法:**
+
 - `GOOGLE_APPLICATION_CREDENTIALS`環境変数が設定されていない
 - サービスアカウントキーファイルのパスが間違っている
 
@@ -888,11 +890,13 @@ $env:GOOGLE_APPLICATION_CREDENTIALS="C:\path\to\service-account-key.json"
 ```
 
 **エラー: `google.auth.exceptions.RefreshError`**
-```
+
+```text
 google.auth.exceptions.RefreshError: The credentials do not contain the necessary fields.
 ```
 
 **原因と対処法:**
+
 - サービスアカウントキーファイルの形式が不正
 - キーファイルが破損している
 - 権限が不足している
@@ -908,11 +912,13 @@ gcloud iam service-accounts keys create new-key.json --iam-account=your-service-
 #### プロジェクト設定関連のエラー
 
 **エラー: `google.api_core.exceptions.PermissionDenied`**
-```
+
+```text
 google.api_core.exceptions.PermissionDenied: 403 Permission denied on resource project my-project.
 ```
 
 **原因と対処法:**
+
 - プロジェクトIDが間違っている
 - Vertex AI APIが有効化されていない
 - サービスアカウントに必要な権限がない
@@ -933,11 +939,13 @@ gcloud projects add-iam-policy-binding PROJECT_ID \
 #### リージョン関連のエラー
 
 **エラー: `google.api_core.exceptions.NotFound`**
-```
+
+```text
 google.api_core.exceptions.NotFound: 404 Location us-central1-a is not found or access is denied.
 ```
 
 **原因と対処法:**
+
 - 指定したリージョンでVertex AIが利用できない
 - リージョン名が間違っている
 
@@ -958,11 +966,13 @@ export GOOGLE_CLOUD_REGION="us-central1"
 #### モデル関連のエラー
 
 **エラー: `google.api_core.exceptions.InvalidArgument`**
-```
+
+```text
 google.api_core.exceptions.InvalidArgument: 400 Model gemini-pro-vision does not exist.
 ```
 
 **原因と対処法:**
+
 - モデル名が間違っている
 - 指定したリージョンでモデルが利用できない
 
@@ -981,11 +991,13 @@ model_name = "gemini-1.5-pro"  # 正しいモデル名
 #### ネットワーク関連のエラー
 
 **エラー: `requests.exceptions.ConnectionError`**
-```
+
+```text
 requests.exceptions.ConnectionError: HTTPSConnectionPool(host='aiplatform.googleapis.com', port=443)
 ```
 
 **原因と対処法:**
+
 - インターネット接続の問題
 - プロキシ設定の問題
 - ファイアウォールによるブロック
@@ -1002,11 +1014,13 @@ export HTTP_PROXY=http://proxy.company.com:8080
 #### 料金・クォータ関連のエラー
 
 **エラー: `google.api_core.exceptions.ResourceExhausted`**
-```
+
+```text
 google.api_core.exceptions.ResourceExhausted: 429 Quota exceeded for quota metric 'aiplatform.googleapis.com/requests' 
 ```
 
 **原因と対処法:**
+
 - API呼び出し回数の上限に達した
 - 課金が停止している
 
