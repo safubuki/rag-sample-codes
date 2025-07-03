@@ -42,7 +42,8 @@ interface LogDetail {
 const MODES: ProcessingMode[] = [
   { value: 'llm_only', label: 'LLM単体', description: '外部情報なしでLLMのみ', color: 'bg-gray-100 text-gray-800 border-gray-300' },
   { value: 'prompt_stuffing', label: 'プロンプトスタッフィング', description: '全情報をプロンプトに埋め込み', color: 'bg-blue-100 text-blue-800 border-blue-300' },
-  { value: 'rag_only', label: 'RAGのみ', description: 'ベクトル検索による情報取得', color: 'bg-green-100 text-green-800 border-green-300' },
+  { value: 'rag_only', label: 'RAGベーシック', description: 'ベクトル検索による情報取得', color: 'bg-green-100 text-green-800 border-green-300' },
+  { value: 'rag_advanced', label: 'RAG高度版', description: 'CrossEncoder再ランキング+最適化', color: 'bg-emerald-100 text-emerald-800 border-emerald-300' },
   { value: 'function_calling', label: 'Function Calling', description: 'LLMによる動的ツール利用', color: 'bg-purple-100 text-purple-800 border-purple-300' },
   { value: 'rag_function_calling', label: 'RAG + Function Calling', description: 'RAGとFunction Callingの組み合わせ（推奨）', color: 'bg-amber-100 text-amber-800 border-amber-300' }
 ];
