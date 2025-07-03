@@ -67,13 +67,45 @@ npm run dev
 - **バックエンドAPI**: <http://localhost:8000>
 - **API仕様書**: <http://localhost:8000/docs>
 
-### 使用方法
+### 基本的な使用方法
 
-1. 処理モードを選択（5つの手法から）
-2. 質問を入力（例: 「エラーコードE-404の対処法は？」）
-3. 実行ボタンをクリック
-4. 結果・トークン数・処理時間を確認
-5. 必要に応じてログをダウンロード
+1. ブラウザで <http://localhost:3000> にアクセス
+2. 処理モードを選択（5つの手法から）
+3. 質問を入力（例: 「エラーコードE-404の対処法は？」）
+4. 「送信」ボタンをクリック
+5. リアルタイムで処理状況・結果・トークン数を確認
+6. 必要に応じてナレッジベースを編集
+7. 実行ログをダウンロード
+
+### トラブルシューティング
+
+#### 起動時によくあるエラー
+
+**エラー: `ModuleNotFoundError`**
+```bash
+# 仮想環境が有効化されていない可能性
+.venv\Scripts\activate  # Windows
+pip install -r src/backend/requirements.txt
+```
+
+**エラー: `Port 3000 is already in use`**
+```bash
+# 別のポートで起動
+cd src/frontend
+npm run dev -- --port 3001
+```
+
+**エラー: Google Cloud認証エラー**
+- `.env`ファイルの設定を確認
+- サービスアカウントキーファイルのパスを確認
+- 詳細は「Google Cloud & LLM 接続トラブルシューティング」セクションを参照
+
+### システム停止方法
+
+```bash
+# 各ターミナルで Ctrl+C を押すか、ターミナルを閉じる
+# Windowsの場合はタスクマネージャーからプロセスを終了することも可能
+```
 
 ## 🔧 5つの手法の概要
 
@@ -599,215 +631,578 @@ rag-sample-codes/
   - verbose=Trueで思考プロセスが見える
 - **利点**: 最も柔軟で実用的
 
-### RAG精度改善のベストプラクティス
+## 📚 用語集（RAG・LLM関連）
 
-RAGシステムの検索精度が低い場合の改善手法について、本プロジェクトでの実装経験に基づいてまとめます。
+### 基本概念
 
-#### 一般的な問題とその原因
+**RAG（Retrieval-Augmented Generation）**
+検索拡張生成。外部知識ベースから関連情報を検索し、その情報を元にLLMが回答を生成する手法。LLMの知識の制約を補い、最新情報や特定ドメインの情報を活用できる。
 
-RAGシステムでよく発生する問題：
+**LLM（Large Language Model）**
+大規模言語モデル。GPT、Gemini、Claude等の汎用的な言語理解・生成能力を持つAIモデル。
 
-1. **具体的なクエリは成功するが、広い概念のクエリで失敗する**
-   - 例：「200時間メンテナンス」(成功) vs 「定期メンテナンス情報」(失敗)
+**Vector Store（ベクトルストア）**
+文書をベクトル形式で保存し、高速な類似検索を可能にするデータベース。Chroma、Pinecone、Weaviate等がある。
 
-2. **関連性の低いチャンクが上位に来る**
-   - ベクトル検索のみに依存した場合によく発生
+**Embedding（埋め込み）**
+テキストを数値ベクトルに変換する処理。類似した意味の文書は近いベクトル値を持つため、意味検索が可能になる。
 
-3. **情報の断片化により文脈が失われる**
-   - チャンクサイズが小さすぎる場合
+### 検索・取得関連
 
-#### 原因分析
+**Similarity Search（類似検索）**
+クエリと最も類似したベクトルを持つ文書を検索する手法。コサイン類似度やユークリッド距離等で計算される。
 
-| 問題 | 原因 | 影響 |
-|------|------|------|
-| セクション情報の断片化 | チャンクサイズが小さすぎる（例：500文字） | 文脈が失われ、関連情報が分離される |
-| 不適切な検索結果 | ベクトル検索のみに依存 | 広い概念のクエリで関連性の低いチャンクが上位に来る |
-| 検索候補不足 | 検索範囲が制限されている（例：3チャンクのみ） | 十分な候補チャンクを取得できない |
-| セクション境界の無視 | セクションヘッダーを考慮しない分割 | 情報が断片化し、構造が失われる |
+**Hybrid Search（ハイブリッド検索）**
+ベクトル検索（意味的類似性）とキーワード検索（語彙的一致）を組み合わせた検索手法。より精度の高い検索結果を得られる。
 
-#### 実装した改善手法
+**Retrieval（検索・取得）**
+クエリに関連する文書やチャンクを知識ベースから取得するプロセス。RAGの「R」に相当する。
 
-本プロジェクトの`run_rag_only.py`で実装した改善手法：
+**Top-K Retrieval**
+類似度が高い上位K件の文書を取得する手法。Kの値により検索範囲と精度のバランスを調整する。
 
-##### 1. チャンクサイズとオーバーラップの最適化
+### 文書処理関連
 
-```python
-# 改善前
-text_splitter = RecursiveCharacterTextSplitter(
-    chunk_size=500,
-    chunk_overlap=50,
-    separators=["\n\n", "\n", "。", "、", " ", ""]
-)
+**Chunking（チャンク分割）**
+長い文書を小さな単位（チャンク）に分割する処理。LLMのコンテキスト制限に対応し、検索精度を向上させる。
 
-# 改善後
-text_splitter = RecursiveCharacterTextSplitter(
-    chunk_size=800,       # 500 → 800文字（コンテキスト保持向上）
-    chunk_overlap=150,    # 50 → 150文字（情報断片化防止）
-    separators=["## ", "\n\n", "\n", "。", "、", " ", ""]  # セクションヘッダーを優先
-)
+**Chunk Size（チャンクサイズ）**
+各チャンクに含める文字数やトークン数。小さすぎると文脈が失われ、大きすぎると検索精度が低下する。
+
+**Chunk Overlap（チャンクオーバーラップ）**
+隣接するチャンク間で重複させる文字数。文脈の切断を防ぎ、検索精度を向上させる。
+
+**Document Splitting（文書分割）**
+文書をセクション、段落、文などの意味的単位で分割する処理。単純な文字数分割より精度が高い。
+
+### プロンプト・生成関連
+
+**Prompt Template（プロンプトテンプレート）**
+LLMへの指示を定型化したテンプレート。一貫性のある出力を得るために使用される。
+
+**Prompt Stuffing（プロンプト詰め込み）**
+関連文書をすべてプロンプトに含めてLLMに送信する手法。シンプルだがトークン制限に注意が必要。
+
+**Context Window（コンテキストウィンドウ）**
+LLMが一度に処理できるトークンの最大数。モデルによって異なり、長い文書の処理能力に影響する。
+
+**Token（トークン）**
+LLMが処理する最小単位。通常、単語の一部から数単語程度。日本語では1文字あたり2-3トークン程度。
+
+### 機能・モード関連
+
+**Function Calling（関数呼び出し）**
+LLMが外部の関数やAPIを呼び出して動的に情報を取得・処理する機能。
+
+**Grounding（グラウンディング）**
+LLMの回答を外部の事実に基づかせること。RAGはグラウンディングの一種。
+
+**Hallucination（幻覚）**
+LLMが事実に基づかない内容を生成すること。RAGにより軽減できる。
+
+### 評価・パフォーマンス関連
+
+**Relevance（関連性）**
+検索結果がクエリにどの程度関連しているかの指標。RAGシステムの重要な評価軸。
+
+**Precision（精密度）**
+検索結果のうち実際に関連性の高い文書の割合。
+
+**Recall（再現率）**
+関連する全文書のうち実際に検索で取得できた文書の割合。
+
+**Latency（レイテンシ）**
+クエリから回答までの応答時間。ユーザー体験に直結する重要な指標。
+
+### 技術実装関連
+
+**Vector Database（ベクトルデータベース）**
+高次元ベクトルの保存・検索に特化したデータベース。ANN（近似最近傍）検索を高速実行する。
+
+**Semantic Search（意味検索）**
+単語の表面的な一致ではなく、意味的な類似性に基づく検索。埋め込みベクトルを利用する。
+
+**Reranking（再ランキング）**
+初期検索結果をより精密なモデルで再評価・並び替えする手法。検索精度をさらに向上させる。
+
+**Metadata Filtering（メタデータフィルタリング）**
+日付、カテゴリ、作成者等のメタデータを使って検索対象を事前に絞り込む手法。
+
+## 📋 事前準備: Google Cloud AI API設定
+
+このシステムを動作させるには、Google Cloud ProjectでVertex AI APIを設定する必要があります。
+
+### ステップ1: Google Cloud Projectの作成
+
+1. [Google Cloud Console](https://console.cloud.google.com/)にアクセス
+2. 「プロジェクトを選択」→「新しいプロジェクト」をクリック
+3. プロジェクト名を入力（例: `my-rag-project`）
+4. 「作成」をクリック
+5. **重要**: 作成されたプロジェクトIDをメモしてください
+
+### ステップ2: Vertex AI APIの有効化
+
+1. [APIライブラリ](https://console.cloud.google.com/apis/library)に移動
+2. 「Vertex AI API」を検索
+3. 「Vertex AI API」をクリック→「有効にする」をクリック
+4. または、Cloud Shellで以下を実行:
+   ```bash
+   gcloud services enable aiplatform.googleapis.com
+   ```
+
+### ステップ3: 認証設定（推奨方法: サービスアカウント）
+
+1. [IAM & 管理 > サービスアカウント](https://console.cloud.google.com/iam-admin/serviceaccounts)に移動
+2. 「サービスアカウントを作成」をクリック
+3. サービスアカウント名を入力（例: `rag-service-account`）
+4. 「作成して続行」をクリック
+5. ロールで「Vertex AI ユーザー」を選択
+6. 「完了」をクリック
+7. 作成されたサービスアカウントをクリック
+8. 「キー」タブ→「キーを追加」→「新しいキーを作成」
+9. 「JSON」を選択→「作成」
+10. **重要**: ダウンロードされたJSONファイルを安全な場所に保存
+
+### ステップ4: 認証設定（代替方法: gcloud CLI）
+
+```bash
+# Google Cloud CLIをインストール後
+gcloud auth application-default login
+gcloud config set project YOUR_PROJECT_ID
 ```
 
-**効果**: セクション情報を保持し、文脈の断片化を防ぐ
+### ステップ5: 環境変数の設定
 
-##### 2. ハイブリッド検索の実装
+プロジェクトルートに`.env`ファイルを作成:
+
+```bash
+# 必須設定
+GOOGLE_CLOUD_PROJECT=your-actual-project-id
+GOOGLE_APPLICATION_CREDENTIALS=C:/path/to/your/service-account-key.json
+GOOGLE_CLOUD_REGION=us-central1
+
+# オプション設定
+CHUNK_SIZE=800
+CHUNK_OVERLAP=150
+MAX_RETRIEVED_DOCS=5
+```
+
+**Windows PowerShellの場合の環境変数設定例:**
+```powershell
+$env:GOOGLE_CLOUD_PROJECT="your-project-id"
+$env:GOOGLE_APPLICATION_CREDENTIALS="C:\path\to\service-account-key.json"
+```
+
+## 🚀 インストール・実行手順
+
+### 初回セットアップ（初めて実行する場合）
+
+#### 1. 前提条件の確認
+
+- Python 3.10以上
+- Node.js 18以上
+- Git
+
+#### 2. プロジェクトのクローン
+
+```bash
+git clone <repository-url>
+cd rag-sample-codes
+```
+
+#### 3. バックエンド環境構築
+
+```bash
+# Python仮想環境作成・有効化
+python -m venv .venv
+
+# Windows
+.venv\Scripts\activate
+
+# Linux/Mac
+source .venv/bin/activate
+
+# 依存関係インストール
+pip install -r src/backend/requirements.txt
+```
+
+#### 4. フロントエンド環境構築
+
+```bash
+cd src/frontend
+npm install
+cd ../..
+```
+
+#### 5. 環境変数設定
+
+前述の「事前準備」で設定した`.env`ファイルがプロジェクトルートにあることを確認。
+
+#### 6. 初回実行テスト
+
+```bash
+# ターミナル1: バックエンド起動
+python src/backend/main.py
+
+# ターミナル2: フロントエンド起動（新しいターミナルで）
+cd src/frontend
+npm run dev
+```
+
+#### 7. 動作確認
+
+- **フロントエンド**: http://localhost:3000
+- **バックエンドAPI**: http://localhost:8000
+- **API仕様書**: http://localhost:8000/docs
+
+### 通常実行（2回目以降）
+
+一度環境構築が完了していれば、以下の手順で簡単に起動できます：
+
+#### 方法1: 手動起動
+
+```bash
+# 1. Python仮想環境を有効化
+.venv\Scripts\activate  # Windows
+# source .venv/bin/activate  # Linux/Mac
+
+# 2. バックエンド起動（ターミナル1）
+python src/backend/main.py
+
+# 3. フロントエンド起動（ターミナル2）
+cd src/frontend
+npm run dev
+```
+
+#### 方法2: 一括起動スクリプト（推奨）
+
+**Windows用 `start.bat`:**
+```batch
+@echo off
+echo RAG Sample System Starting...
+
+:: バックエンド起動
+start "Backend" cmd /k ".venv\Scripts\activate && python src/backend/main.py"
+
+:: フロントエンド起動
+start "Frontend" cmd /k "cd src/frontend && npm run dev"
+
+echo システムを起動しています...
+echo バックエンド: http://localhost:8000
+echo フロントエンド: http://localhost:3000
+pause
+```
+
+**Linux/Mac用 `start.sh`:**
+```bash
+#!/bin/bash
+echo "RAG Sample System Starting..."
+
+# バックエンド起動
+source .venv/bin/activate
+python src/backend/main.py &
+
+# フロントエンド起動
+cd src/frontend
+npm run dev &
+
+echo "システムを起動しています..."
+echo "バックエンド: http://localhost:8000"
+echo "フロントエンド: http://localhost:3000"
+```
+
+## 📊 ログフォーマット
+
+実行ログは`logs/`フォルダに`YYYYMMDDHHMMSS_llm-rag-exp.jsonl`形式で保存されます：
+
+```json
+{
+  "timestamp": "2025-07-02T15:30:45.123456",
+  "execution_mode": "rag_function_calling",
+  "query": "エラーコードE-404の対処法は？",
+  "response": "...",
+  "input_tokens": 150,
+  "output_tokens": 200,
+  "total_tokens": 350,
+  "execution_time": 3.45,
+  "intermediate_steps": [...],
+  "demo_mode": false
+}
+```
+
+## Google Cloud & LLM 接続トラブルシューティング
+
+### よくある接続エラーと対処法
+
+#### 認証関連のエラー
+
+**エラー: `google.auth.exceptions.DefaultCredentialsError`**
+```
+google.auth.exceptions.DefaultCredentialsError: Could not automatically determine credentials.
+```
+
+**原因と対処法:**
+- `GOOGLE_APPLICATION_CREDENTIALS`環境変数が設定されていない
+- サービスアカウントキーファイルのパスが間違っている
+
+```bash
+# 環境変数を確認
+echo $env:GOOGLE_APPLICATION_CREDENTIALS  # Windows PowerShell
+echo $GOOGLE_APPLICATION_CREDENTIALS     # Linux/Mac
+
+# 正しく設定
+$env:GOOGLE_APPLICATION_CREDENTIALS="C:\path\to\service-account-key.json"
+```
+
+**エラー: `google.auth.exceptions.RefreshError`**
+```
+google.auth.exceptions.RefreshError: The credentials do not contain the necessary fields.
+```
+
+**原因と対処法:**
+- サービスアカウントキーファイルの形式が不正
+- キーファイルが破損している
+- 権限が不足している
+
+```bash
+# キーファイルの内容を確認（JSONとして有効かチェック）
+python -c "import json; print(json.load(open('path/to/key.json'))['type'])"
+
+# 新しいキーを生成し直す
+gcloud iam service-accounts keys create new-key.json --iam-account=your-service-account@project.iam.gserviceaccount.com
+```
+
+#### プロジェクト設定関連のエラー
+
+**エラー: `google.api_core.exceptions.PermissionDenied`**
+```
+google.api_core.exceptions.PermissionDenied: 403 Permission denied on resource project my-project.
+```
+
+**原因と対処法:**
+- プロジェクトIDが間違っている
+- Vertex AI APIが有効化されていない
+- サービスアカウントに必要な権限がない
+
+```bash
+# プロジェクトIDを確認
+gcloud config get-value project
+
+# Vertex AI APIを有効化
+gcloud services enable aiplatform.googleapis.com
+
+# 必要な権限を追加
+gcloud projects add-iam-policy-binding PROJECT_ID \
+    --member="serviceAccount:your-service-account@PROJECT_ID.iam.gserviceaccount.com" \
+    --role="roles/aiplatform.user"
+```
+
+#### リージョン関連のエラー
+
+**エラー: `google.api_core.exceptions.NotFound`**
+```
+google.api_core.exceptions.NotFound: 404 Location us-central1-a is not found or access is denied.
+```
+
+**原因と対処法:**
+- 指定したリージョンでVertex AIが利用できない
+- リージョン名が間違っている
 
 ```python
-# ベクトル検索 + キーワードベース検索
-retrieved_docs = retriever.get_relevant_documents(query)
+# 利用可能なリージョンを確認
+SUPPORTED_REGIONS = [
+    "us-central1",
+    "us-east1", 
+    "us-west1",
+    "europe-west1",
+    "asia-northeast1"
+]
 
-# メンテナンス関連クエリの特別処理
-maintenance_keywords = ["メンテナンス", "定期", "保守", "点検", "交換", "清掃"]
-is_maintenance_query = any(keyword in query for keyword in maintenance_keywords)
+# 環境変数でリージョンを指定
+export GOOGLE_CLOUD_REGION="us-central1"
+```
 
-if is_maintenance_query:
-    # メンテナンス関連のチャンクを明示的に検索
-    maintenance_docs = []
-    for doc in splits:
-        if any(keyword in doc.page_content for keyword in maintenance_keywords):
-            maintenance_docs.append(doc)
+#### モデル関連のエラー
+
+**エラー: `google.api_core.exceptions.InvalidArgument`**
+```
+google.api_core.exceptions.InvalidArgument: 400 Model gemini-pro-vision does not exist.
+```
+
+**原因と対処法:**
+- モデル名が間違っている
+- 指定したリージョンでモデルが利用できない
+
+```python
+# 利用可能なモデルを確認
+AVAILABLE_MODELS = {
+    "gemini-1.5-pro": "最新の高性能モデル",
+    "gemini-1.5-flash": "高速レスポンスモデル", 
+    "gemini-pro": "汎用モデル"
+}
+
+# モデル名を修正
+model_name = "gemini-1.5-pro"  # 正しいモデル名
+```
+
+#### ネットワーク関連のエラー
+
+**エラー: `requests.exceptions.ConnectionError`**
+```
+requests.exceptions.ConnectionError: HTTPSConnectionPool(host='aiplatform.googleapis.com', port=443)
+```
+
+**原因と対処法:**
+- インターネット接続の問題
+- プロキシ設定の問題
+- ファイアウォールによるブロック
+
+```bash
+# 接続確認
+curl -I https://aiplatform.googleapis.com
+
+# プロキシ設定（必要に応じて）
+export HTTPS_PROXY=http://proxy.company.com:8080
+export HTTP_PROXY=http://proxy.company.com:8080
+```
+
+#### 料金・クォータ関連のエラー
+
+**エラー: `google.api_core.exceptions.ResourceExhausted`**
+```
+google.api_core.exceptions.ResourceExhausted: 429 Quota exceeded for quota metric 'aiplatform.googleapis.com/requests' 
+```
+
+**原因と対処法:**
+- API呼び出し回数の上限に達した
+- 課金が停止している
+
+```bash
+# クォータ使用量を確認
+gcloud monitoring metrics list --filter="aiplatform.googleapis.com"
+
+# 課金アカウントを確認
+gcloud billing accounts list
+gcloud billing projects describe PROJECT_ID
+```
+
+### デバッグ用の設定
+
+#### 詳細ログの有効化
+
+```python
+import logging
+import google.auth
+from google.auth.transport.requests import Request
+
+# 詳細ログを有効化
+logging.basicConfig(level=logging.DEBUG)
+logger = logging.getLogger('google.auth')
+logger.setLevel(logging.DEBUG)
+
+# 認証情報の確認
+credentials, project = google.auth.default()
+credentials.refresh(Request())
+print(f"Project: {project}")
+print(f"Token valid: {credentials.valid}")
+```
+
+#### 環境変数の確認スクリプト
+
+```python
+import os
+import json
+from pathlib import Path
+
+def check_environment():
+    """環境設定を確認するデバッグ関数"""
     
-    # 既存の検索結果に追加（重複排除）
-    existing_content = {doc.page_content for doc in retrieved_docs}
-    for doc in maintenance_docs:
-        if doc.page_content not in existing_content:
-            retrieved_docs.append(doc)
-```
-**効果**: 特定のドメイン知識（メンテナンス、エラーコードなど）の検索精度向上
+    # 必須環境変数をチェック
+    required_vars = [
+        "GOOGLE_CLOUD_PROJECT",
+        "GOOGLE_APPLICATION_CREDENTIALS"
+    ]
+    
+    print("=== 環境変数確認 ===")
+    for var in required_vars:
+        value = os.getenv(var)
+        if value:
+            print(f"✅ {var}: {value}")
+            
+            # サービスアカウントキーファイルの確認
+            if var == "GOOGLE_APPLICATION_CREDENTIALS":
+                if Path(value).exists():
+                    try:
+                        with open(value) as f:
+                            key_data = json.load(f)
+                        print(f"   📋 Type: {key_data.get('type')}")
+                        print(f"   📋 Project: {key_data.get('project_id')}")
+                        print(f"   📋 Client Email: {key_data.get('client_email')}")
+                    except Exception as e:
+                        print(f"   ❌ キーファイル読み込みエラー: {e}")
+                else:
+                    print(f"   ❌ ファイルが存在しません: {value}")
+        else:
+            print(f"❌ {var}: 未設定")
+    
+    # Vertex AI利用可能性チェック
+    print("\n=== Vertex AI接続確認 ===")
+    try:
+        from google.cloud import aiplatform
+        aiplatform.init(project=os.getenv("GOOGLE_CLOUD_PROJECT"))
+        print("✅ Vertex AI初期化成功")
+    except Exception as e:
+        print(f"❌ Vertex AI初期化失敗: {e}")
 
-##### 3. 検索範囲の拡大
+if __name__ == "__main__":
+    check_environment()
+```
+
+#### 段階的な接続テスト
 
 ```python
-# 改善前: 最大3チャンク
-max_chunks = min(3, len(splits))
+def test_connection_step_by_step():
+    """段階的に接続をテストする関数"""
+    
+    # Step 1: 基本認証
+    print("Step 1: 基本認証テスト")
+    try:
+        import google.auth
+        credentials, project = google.auth.default()
+        print(f"✅ 認証成功 - Project: {project}")
+    except Exception as e:
+        print(f"❌ 認証失敗: {e}")
+        return
+    
+    # Step 2: Vertex AI初期化
+    print("\nStep 2: Vertex AI初期化テスト")
+    try:
+        from google.cloud import aiplatform
+        aiplatform.init(project=project, location="us-central1")
+        print("✅ Vertex AI初期化成功")
+    except Exception as e:
+        print(f"❌ Vertex AI初期化失敗: {e}")
+        return
+    
+    # Step 3: モデル接続テスト
+    print("\nStep 3: モデル接続テスト")
+    try:
+        model = aiplatform.gapic.PredictionServiceClient()
+        print("✅ モデルクライアント作成成功")
+    except Exception as e:
+        print(f"❌ モデル接続失敗: {e}")
+        return
+    
+    print("\n🎉 全ての接続テストが成功しました")
 
-# 改善後: 最大5チャンク
-max_chunks = min(5, len(splits))
-retriever = vectorstore.as_retriever(search_kwargs={"k": max_chunks})
+if __name__ == "__main__":
+    test_connection_step_by_step()
 ```
 
-**効果**: より多くの候補から関連情報を選択可能
+## 🔗 関連ドキュメント
 
-##### 4. デバッグ情報の強化
+- **[RAG実装ベストプラクティスガイド](./rag_best_practice.md)** - 実装時のベストプラクティス、エラーハンドリング、セキュリティ対策、パフォーマンス最適化などの詳細なガイド
 
-```python
-# 検索処理の可視化
-search_debug_info = f"検索されたチャンク: {len(retrieved_docs)}個"
-if is_maintenance_query:
-    search_debug_info += f", メンテナンス関連クエリとして処理"
+---
 
-intermediate_steps.append({
-    "step": "retrieve",
-    "debug_info": search_debug_info,
-    "retrieved_content_preview": context[:200] + "..." if len(context) > 200 else context,
-})
-```
-
-**効果**: 検索処理の透明性向上、トラブルシューティングの容易化
-
-#### 改善結果
-
-| クエリタイプ | 改善前 | 改善後 | 改善内容 |
-|--------------|--------|--------|----------|
-| 具体的クエリ<br/>「200時間メンテナンス」 | ✅ 成功 | ✅ 成功 | 変わらず正確 |
-| 広い概念クエリ<br/>「定期メンテナンス情報」 | ❌ 失敗<br/>「情報は記載されていません」 | ✅ 成功<br/>全メンテナンススケジュール提供 | **大幅改善** |
-| エラーコード<br/>「E-404対処法」 | ✅ 成功 | ✅ 成功 | より安定的 |
-| 安全規定<br/>「安全規定について」 | △ 部分的 | ✅ 包括的 | 完全性向上 |
-
-#### 追加の改善手法（未実装）
-
-さらなる精度向上のために検討可能な手法：
-
-1. **リランキング**: セマンティック類似度による検索結果の再順位付け
-2. **クエリ拡張**: 同義語や関連語を追加してクエリを拡張
-3. **階層的検索**: セクション単位での粗い検索→詳細検索の2段階検索
-4. **ファインチューニング**: ドメイン特化の埋め込みモデル使用
-5. **グラフRAG**: 知識グラフを活用した構造化検索
-
-#### 実装時の注意点
-
-- **チャンクサイズ**: 大きすぎるとノイズが増加、小さすぎると文脈が失われる
-- **オーバーラップ**: 適切な範囲（チャンクサイズの15-20%程度）で設定
-- **キーワード検索**: ドメイン知識に基づく適切なキーワード選定が重要
-- **デバッグ情報**: 本番環境では無効化してパフォーマンスを確保
-
-この改善により、RAGシステムは特定の情報検索と広い概念の理解の両方で高い精度を実現できます。
-
-### 開発・改善プロセスから得られた知見
-
-本プロジェクトの開発過程で得られた実践的な知見をまとめます。
-
-#### システム設計・アーキテクチャ
-
-**統一的な比較環境の重要性**
-- 同一データ・同一質問での比較により、各手法の特性が明確に把握できた
-- モジュール化された設計により、個別手法の改善が他に影響せず実施可能
-
-**ログとデバッグ機能の価値**
-- 詳細なログ（実際のプロンプト、中間ステップ、実行時間）により問題特定が容易
-- デバッグ情報により検索プロセスの透明性が確保され、改善方向が明確化
-
-#### RAG実装のベストプラクティス
-
-**段階的改善アプローチの有効性**
-1. **ベースライン確立**: 基本的なRAG実装で全体の動作を確認
-2. **問題特定**: 具体例での成功/失敗パターンを詳細分析
-3. **原因分析**: チャンクサイズ、検索アルゴリズム、セクション構造を検証
-4. **改善実装**: 一つずつ改善手法を追加し、効果を測定
-5. **検証・調整**: 複数のクエリタイプで動作を確認
-
-**効果的な問題発見手法**
-- **対照的なテストケース**: 成功例と失敗例の比較による問題の明確化
-- **実際のプロンプト確認**: LLMに送られる最終プロンプトの内容検証
-- **中間ステップ分析**: 検索→プロンプト構築→生成の各段階での検証
-
-#### 技術選択の判断基準
-
-**手法選択の実践的指針**
-
-| 状況 | 推奨手法 | 理由 |
-|------|----------|------|
-| 小規模データ（<10KB） | プロンプトスタッフィング | シンプルで確実、トークン消費も現実的 |
-| 大規模データ（>100KB） | RAGのみ | 効率的、スケーラブル |
-| 動的データアクセス要件 | Function Calling | 柔軟性、リアルタイム性 |
-| 高精度・高信頼性要件 | RAG + Function Calling | 最も包括的、複数アプローチの利点を活用 |
-| 開発初期・MVP | LLM単体 → プロンプトスタッフィング | 段階的な複雑性の導入 |
-
-#### 実装時の注意点とトラブルシューティング
-
-**よくある問題と対処法**
-
-1. **検索精度の問題**
-   - 症状: 関連性の低い情報が取得される
-   - 対処: チャンクサイズ調整、ハイブリッド検索、キーワード検索の追加
-
-2. **トークン制限への対処**
-   - 症状: プロンプトが長すぎてエラー
-   - 対処: 検索結果の制限、要約処理、ストリーミング対応
-
-3. **レスポンス速度の問題**
-   - 症状: 処理時間が長い
-   - 対処: ベクトルストアの最適化、並列処理、キャッシング
-
-4. **認証・環境設定エラー**
-   - 症状: Google Cloud認証失敗
-   - 対処: 環境変数確認、サービスアカウント設定、gcloud認証
-
-#### プロダクション運用への展開指針
-
-**段階的デプロイメント**
-1. **開発環境**: 基本機能とローカルテスト
-2. **ステージング環境**: 実データでの性能・精度検証
-3. **本番環境**: 段階的ロールアウト、監視・ログ体制整備
-
-**監視・メンテナンス項目**
-- **性能メトリクス**: レスポンス時間、スループット、エラー率
-- **品質メトリクス**: 回答精度、ユーザー満足度、検索成功率
-- **コストメトリクス**: トークン消費量、API呼び出し回数、リソース使用量
-
-**継続的改善のサイクル**
-1. **ログ分析**: 失敗パターン、頻繁な質問タイプの特定
-2. **ナレッジベース更新**: 新しい情報の追加、古い情報の更新
-3. **検索アルゴリズム調整**: チューニングパラメータの最適化
-4. **新機能追加**: ユーザーフィードバックに基づく機能拡張
-
-この開発プロセスにより、理論的な知識だけでなく実践的なRAGシステム構築のノウハウを習得できます。
+**重要**: このプロジェクトを実行するには、Google Cloud ProjectでのVertex AI API有効化と適切な認証設定が必要です。上記のクイックスタートガイドに従って設定を行ってください。
